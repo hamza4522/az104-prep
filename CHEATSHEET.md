@@ -185,7 +185,48 @@
 7. **NSG both directions** — subnet NSG AND NIC NSG must both allow
 8. **ReadOnly lock blocks everyone** — including Owners
 9. **Archive = offline** — must rehydrate before reading (up to 15 hrs)
-10. **VPN Gateway takes 30-45 min** — this is normal!
+10. **VPN Gateway takes 30-45 min**
+
+## 🆕 Additional Topics (Added Coverage)
+
+| Topic | Key Facts |
+|-------|-----------|
+| System-assigned MI | Tied to ONE resource, **deleted with resource** |
+| User-assigned MI | Independent, assignable to **many resources** |
+| MI credentials | Managed by **Azure** — no passwords, no rotation |
+| IMDS endpoint | **169.254.169.254** — internal metadata endpoint |
+| Key Vault tiers | Standard (software) / **Premium (HSM-protected)** |
+| Key Vault soft delete | **Enabled by default**, 90-day retention |
+| Purge protection | Prevents purge during retention; **cannot disable once enabled** |
+| Key Vault RBAC | Recommended over Access Policies |
+| Key Vault Secrets User | Read secrets only (assign to apps/MIs) |
+| App Service KV ref | `@Microsoft.KeyVault(VaultName=...;SecretName=...)` |
+| ARM template deployment | **Incremental** (default) or **Complete** (deletes extras) |
+| ARM Complete mode | **DELETES** resources in RG not in template — dangerous! |
+| ARM What-If | Preview changes without deploying |
+| Bicep | Simpler syntax, compiles to ARM, no state file |
+| Template Specs | Store templates in Azure with versioning |
+| Hub-Spoke | Hub = shared services (firewall, VPN gateway) |
+| Spoke-to-spoke | NOT direct — route through **hub firewall + UDR** |
+| Allow gateway transit | Set on **Hub's peering** |
+| Use remote gateways | Set on **Spoke's peering** |
+| Azure Virtual WAN | Microsoft-managed hub-spoke |
+| Private Endpoint | Private IP in VNet for Azure PaaS services |
+| Private DNS Zone | **Required** for private endpoint DNS resolution |
+| DNS zone must be | Linked to every VNet that needs to resolve |
+| Service endpoint | VNet-routed but still public IP |
+| Azure Automation | Runbooks, Update Management, DSC, Change Tracking |
+| Hybrid Runbook Worker | Run runbooks against on-prem resources |
+| Update Management | Patch VMs; requires Log Analytics workspace |
+| DSC ApplyAndAutoCorrect | **Auto-fixes** configuration drift |
+| Azure Advisor | FREE recommendations: Cost, Security, Reliability, Performance, OpEx |
+| Secure Score | **0–100** in Defender for Cloud |
+| JIT VM Access | Requires **Defender for Servers**; ports closed by default |
+| Defender Plans | Paid, per-workload protection (Servers, Storage, SQL, etc.) |
+
+---
+
+## ⚡ Quick Tips for Exam Day!
 
 ---
 
