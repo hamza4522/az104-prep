@@ -1,183 +1,85 @@
-# Azure Backup
+# Azure Backup & Recovery Services
 
-> 🎯 Exam Weight: Part of 20–25% Compute domain
-
----
-
-## 🔑 What is Azure Backup?
-
-- Built-in Azure service to **back up and restore** data
-- Protects: VMs, Azure Files, SQL in VMs, SAP HANA, on-premises (MARS agent)
-- Stores backups in **Recovery Services Vaults** or **Backup Vaults**
+> 🎯 Exam Weight: Part of 10–15% Monitoring & Backup domain
 
 ---
 
-## 🏛️ Recovery Services Vault
+## 🔑 Recovery Services Vault vs Backup Vault
 
-### What It Is
-- Centralized storage for backups and recovery points
-- Must be in the **same region** as the resource being backed up
-- Can have its own **redundancy settings** (LRS, ZRS, GRS)
-
-### Vault Redundancy Options
-| Option | Description |
-|--------|-------------|
-| **LRS** | 3 copies in same datacenter |
-| **ZRS** | 3 copies across availability zones |
-| **GRS (default)** | 6 copies, primary + secondary region |
-
-> ⚠️ Vault redundancy setting can only be changed **before the first backup** is configured.
-
-### Soft Delete
-- **14-day soft delete** for backup data by default
-- Deleted backup data retained for 14 days, can be restored
-- Can be disabled but recommended to keep enabled
+| Vault Type | Protected Workloads |
+|------------|---------------------|
+| **Recovery Services Vault** | Azure VMs, SQL Server in Azure VMs, SAP HANA, Azure Files, on-prem physical/virtual servers (via MARS/MABS) |
+| **Backup Vault** | Azure Disks, Azure Blobs, Azure PostgreSQL, AKS persistent volumes |
 
 ---
 
-## 💻 Azure VM Backup
+## 🛡️ Azure VM Backup Architecture
 
-### How It Works
-- **Application-consistent snapshots** (uses VSS on Windows, pre/post scripts on Linux)
-- Backup data stored in Recovery Services Vault
-- First backup is a **full backup**, subsequent are **incremental**
+- Agentless snapshot backup via the **VMSnapshot** extension (automatically installed)
+- Application-consistent backups for Windows (VSS) and Linux (pre/post scripts)
+- **Backup Policies**:
+  - Frequency: Daily, Weekly, Hourly
+  - Retention: Daily, Weekly, Monthly, Yearly (Grandfather-Father-Son retention)
 
-### VM Backup Process
-1. Azure triggers a **snapshot** of the VM disks
-2. Snapshot is transferred to the **Recovery Services Vault**
-3. Recovery points are created in the vault
+### Cross-Region Restore (CRR)
+- Requires a vault with **Geo-Redundant Storage (GRS)** and **Cross Region Restore** enabled
+- Enables restoring backup items in the Azure **secondary paired region** at any time
+- Does **NOT** require waiting for Microsoft to declare a regional disaster!
 
-### Backup Policy
-- Define: **frequency** (daily) and **retention** (how long to keep)
-- Retention options: daily, weekly, monthly, yearly retention points
+---
 
-| Retention Period | Max Duration |
-|-----------------|-------------|
-| Daily | 180 days |
-| Weekly | 520 weeks (~10 years) |
-| Monthly | 120 months (10 years) |
-| Yearly | 99 years |
+## 🔄 Restore Options for Azure VMs
 
-### Enabling VM Backup
-```bash
-# Enable backup for a VM
-az backup protection enable-for-vm \
-  --resource-group myRG \
-  --vault-name myVault \
-  --vm myVM \
-  --policy-name DefaultPolicy
-
-# Trigger an on-demand backup
-az backup protection backup-now \
-  --resource-group myRG \
-  --vault-name myVault \
-  --item-name myVM \
-  --container-name myVM \
-  --backup-management-type AzureIaasVM
+```
+Backup Snapshot
+    ├── Create New VM (deploys a new VM directly from the restore point)
+    ├── Restore Disks (generates VHD disks + deployment template in storage)
+    ├── Replace Existing Disk (swaps the OS disk of the live VM)
+    └── File / Folder Recovery (Item-Level Recovery)
 ```
 
----
-
-## 🔄 VM Restore Options
-
-| Restore Type | Description | Use Case |
-|-------------|-------------|----------|
-| **Create new VM** | Deploy a new VM from backup | Full recovery |
-| **Restore disk** | Restore managed disk, attach later | Custom recovery |
-| **File recovery** | Mount recovery point, browse and copy files | Single file/folder |
-| **Replace existing disk** | Swap OS disk on existing VM | In-place recovery |
+### File / Folder Level Recovery (Item-Level Recovery)
+- Allows recovering individual files without restoring the entire multi-gigabyte VM!
+- **How it works**:
+  1. Click **File Recovery** in the vault for the VM.
+  2. Select the recovery point.
+  3. Azure generates a download script (`.exe` for Windows, `.sh` for Linux) containing a temporary password.
+  4. Run the script on the target machine: it mounts the backup recovery point as a **local iSCSI volume**.
+  5. Browse, copy the required files, and unmount the volume.
 
 ---
 
-## 📁 Azure Files Backup
+## 💻 On-Premises Backup: MARS Agent vs MABS
 
-- Backs up **Azure File Shares** snapshots
-- Stored in the storage account (not Recovery Services Vault)
-- Schedule: daily snapshots
-- Retention: up to 200 snapshots
-- Restore: full share, specific folder, or individual files
-
----
-
-## 🖥️ On-Premises Backup
-
-### MARS Agent (Microsoft Azure Recovery Services)
-- Install on **Windows machines** (on-premises or Azure VMs)
-- Backs up **files, folders, and system state** to Recovery Services Vault
-- Does NOT back up full VM (files/folders only)
-
-### Azure Backup Server (MABS)
-- More comprehensive on-premises backup
-- Backs up workloads: Hyper-V, VMware, SQL Server, SharePoint
-- Requires Windows Server + DPM (Data Protection Manager) license or standalone MABS
-
-### Comparison
-| Solution | What It Backs Up | Platform |
-|---------|-----------------|---------|
-| **MARS Agent** | Files, folders, system state | Windows (on-prem or VM) |
-| **MABS** | VMs, workloads (SQL, SharePoint) | Windows Server |
-| **DPM** | Full enterprise workloads | Windows Server + System Center |
-
----
-
-## 🔒 Azure Site Recovery (ASR)
-
-### What is ASR?
-- **Disaster recovery** service — replicates workloads to a secondary location
-- Continuous replication, failover, failback
-- NOT a backup solution — it's for **business continuity/DR**
-
-### Key Concepts
-| Term | Description |
-|------|-------------|
-| **Primary site** | Where VMs are currently running |
-| **Secondary site** | DR target (another Azure region or on-prem) |
-| **RPO** | Recovery Point Objective — max data loss (typically 30-60 seconds) |
-| **RTO** | Recovery Time Objective — max downtime (typically 2 hours) |
-| **Replication** | Continuous async replication to secondary |
-| **Test failover** | Test DR without impacting production |
-| **Failover** | Switch to secondary site |
-| **Failback** | Return to primary after recovery |
-
-### Azure-to-Azure Replication
-- Replicate Azure VMs between regions
-- Uses **cache storage account** for staging
-- Near-zero RPO (seconds to minutes)
-
-> 💡 **ASR vs Azure Backup**:
-> - **Azure Backup** = Protect against data loss (files, corruption)
-> - **Azure Site Recovery** = Protect against site failure (DR, business continuity)
+| Feature | MARS Agent (Azure Backup Agent) | Azure Backup Server (MABS) |
+|---------|--------------------------------|----------------------------|
+| **Architecture** | Lightweight agent on each machine | Dedicated on-prem backup server |
+| **Local Storage** | ❌ None (backs up directly to Azure) | ✅ Yes (caches backups to local disk first) |
+| **Supported Workloads** | Files, folders, Windows System State | Full VMs (Hyper-V, VMware), SQL, Exchange, SharePoint |
+| **Linux Support** | ❌ Windows Server only | ✅ Yes |
 
 ---
 
 ## 📋 Exam-Ready Facts
 
-| Fact | Value |
-|------|-------|
-| Backup vault type | **Recovery Services Vault** |
-| Default vault redundancy | **GRS** |
-| VM backup type | **Incremental** after first full |
-| Soft delete retention | **14 days** |
-| MARS agent backs up | **Files and folders** (not full VM) |
-| ASR RPO | ~**30 seconds** for Azure-to-Azure |
-| Backup vs ASR | Backup = data protection; ASR = DR |
-| Vault redundancy change | Only before **first backup** |
+| Fact | Value / Rule |
+|------|--------------|
+| Restore single file without full VM restore | **File Recovery** (iSCSI mount script) |
+| Restore to secondary paired region | Vault configured with **GRS** + **Cross Region Restore (CRR)** |
+| MARS agent local cache requirement | No local backup storage needed (sends direct to Azure vault) |
+| Deleting Recovery Services Vault with items | Blocked! Must first stop backup and delete backup data |
+| Max backup retention duration | Up to **9,999 days** (~27 years) |
+| Azure VM backup snapshot extension | VMSnapshot / VMSnapshotLinux |
 
 ---
 
-## 🚨 Common Exam Scenarios
+## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
-**Q: A company needs to recover individual files from a VM backup taken 3 days ago. What restore type?**
-→ **File recovery** — mount the recovery point and copy specific files
+**Q: A user accidentally deletes an Excel spreadsheet from a virtual machine named VM1. You need to restore only the deleted spreadsheet with minimal downtime and administrative overhead.**
+→ From the Recovery Services Vault, initiate **File Recovery** for VM1, run the generated script to mount the iSCSI drive, copy the spreadsheet back, and unmount the drive.
 
-**Q: You need to ensure VMs can failover to another Azure region within minutes if the primary region goes down. What do you use?**
-→ **Azure Site Recovery** (not Azure Backup — ASR is for DR/failover)
+**Q: You need to ensure you can restore Azure VM backups in the secondary paired region even when the primary region is fully operational, for disaster recovery drill testing.**
+→ Configure the Recovery Services Vault with **Geo-Redundant Storage (GRS)** and enable **Cross-Region Restore (CRR)**.
 
-**Q: An on-premises Windows Server needs to back up specific folders to Azure. What's the simplest solution?**
-→ Install the **MARS agent** and configure file backup to a Recovery Services Vault
-
-**Q: A company needs to protect against accidental deletion of backup data. What feature?**
-→ **Soft delete** — deleted backups are retained for 14 days for recovery
-
-**Q: You deleted a VM. The OS disk was also deleted. You need to recover the VM to its state 2 days ago. What do you use?**
-→ **Azure Backup** — restore from the 2-day-old recovery point (create new VM or restore disk)
+**Q: You attempt to delete a test Recovery Services Vault, but the operation fails with an error stating protected items exist.**
+→ You must first navigate to **Backup Items**, select the protected items, click **Stop backup**, select **Delete backup data**, and disable soft-delete before the vault can be deleted.

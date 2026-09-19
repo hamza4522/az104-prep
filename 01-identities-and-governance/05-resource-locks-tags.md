@@ -7,199 +7,128 @@
 ## 🔒 Resource Locks
 
 ### What Are Resource Locks?
-- Prevent accidental **deletion or modification** of critical Azure resources
-- Applied at: **Resource**, **Resource Group**, or **Subscription** level
-- Inherited by child resources
-- Override RBAC — even **Owners** cannot delete a locked resource without removing the lock first
+- Built-in ARM feature to prevent accidental **deletion or modification** of critical Azure resources
+- Applied at: **Subscription**, **Resource Group**, or **Individual Resource** level
+- **Inherited down the hierarchy**: A lock on a subscription or resource group applies to all child resources within it
+- **Overrides RBAC**: Even a **Subscription Owner** cannot delete or modify a locked resource without first explicitly removing the lock
 
-### Lock Types
+---
 
-| Lock Type | Description | Can Read? | Can Modify? | Can Delete? |
-|-----------|-------------|-----------|-------------|-------------|
-| **CanNotDelete** | Can manage but cannot delete | ✅ Yes | ✅ Yes | ❌ No |
-| **ReadOnly** | Can read but cannot modify or delete | ✅ Yes | ❌ No | ❌ No |
+### Lock Types & Operational Impact
 
-> ⚠️ **ReadOnly lock** acts like assigning **Reader** role to everyone — even Owners can't make changes while lock is in place.
+| Lock Type | Can Read? | Can Modify / Update? | Can Start / Stop VM? | Can Delete? | Operational Restrictions |
+|-----------|-----------|----------------------|----------------------|-------------|--------------------------|
+| **CanNotDelete** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No | Cannot delete resource or child resources |
+| **ReadOnly** | ✅ Yes | ❌ No | ❌ **No** | ❌ No | Cannot modify configs, cannot start/stop VMs, cannot list storage keys |
 
-> ⚠️ **Exam Gotcha**: **ReadOnly** lock on a Storage Account prevents **listing storage keys** (this is a POST operation, treated as a write). Users won't be able to access storage data.
+> ⚠️ **CRITICAL Exam Gotchas for ReadOnly Locks**:
+> 1. **Virtual Machines**: A `ReadOnly` lock **prevents starting, stopping, or restarting** the VM because power actions issue `POST` requests that alter the resource's runtime state.
+> 2. **Storage Accounts**: A `ReadOnly` lock **prevents listing account access keys** (`POST /listKeys/action`), which blocks data plane tools (Storage Explorer, scripts) from connecting.
+> 3. **Virtual Networks**: A `ReadOnly` lock prevents adding a new subnet, modifying address spaces, or attaching new NICs.
+> 4. **Precedence**: If both `ReadOnly` and `CanNotDelete` locks are applied (e.g., via inheritance), the **most restrictive lock (`ReadOnly`) wins**.
 
-### Lock Inheritance
+---
+
+### Lock Inheritance Flow
+
 ```
-Subscription Lock
+Subscription Lock (e.g. ReadOnly)
     ↓ (inherited)
-    Resource Group Lock
-        ↓ (inherited)
-        Resource Lock (most restrictive wins)
+Resource Group Lock (e.g. CanNotDelete)
+    ↓ (inherited)
+Individual Resource (Effective lock = ReadOnly)
 ```
 
-### Creating Locks
+### Managing Locks via CLI & PowerShell
 
 ```bash
-# Azure CLI
-# Create a CanNotDelete lock on a resource group
+# Azure CLI: Create a CanNotDelete lock on a Resource Group
 az lock create \
-  --name "DoNotDelete" \
+  --name "PreventDeleteRG" \
   --lock-type CanNotDelete \
-  --resource-group "myRG"
+  --resource-group "RG1"
 
-# Create a ReadOnly lock on a specific resource
-az lock create \
-  --name "ReadOnlyLock" \
-  --lock-type ReadOnly \
-  --resource-group "myRG" \
-  --resource-name "myVM" \
-  --resource-type "Microsoft.Compute/virtualMachines"
+# Azure CLI: Delete a lock
+az lock delete --name "PreventDeleteRG" --resource-group "RG1"
 ```
 
 ```powershell
-# PowerShell
-New-AzResourceLock -LockName "DoNotDelete" `
-  -LockLevel CanNotDelete `
-  -ResourceGroupName "myRG"
+# PowerShell: Create a ReadOnly lock on a specific VM
+New-AzResourceLock -LockName "VMReadOnly" `
+  -LockLevel ReadOnly `
+  -ResourceName "VM1" `
+  -ResourceType "Microsoft.Compute/virtualMachines" `
+  -ResourceGroupName "RG1"
 
-# Remove a lock
-Remove-AzResourceLock -LockName "DoNotDelete" `
-  -ResourceGroupName "myRG"
+# PowerShell: Remove a resource lock
+Remove-AzResourceLock -LockName "VMReadOnly" -ResourceGroupName "RG1"
 ```
 
 ### Who Can Manage Locks?
-- **Owner** and **User Access Administrator** roles can create/delete locks
-- Specific permission needed: `Microsoft.Authorization/locks/*`
-- Locks are separate from RBAC permissions — you need explicit lock permissions
+- Requires permissions: `Microsoft.Authorization/*` or `Microsoft.Authorization/locks/*`
+- Built-in roles with this permission: **Owner** and **User Access Administrator**
+- **Contributor** CANNOT create or delete locks!
 
 ---
 
 ## 🏷️ Resource Tags
 
 ### What Are Tags?
-- **Name-value pairs** (metadata) attached to Azure resources
-- Used for: organization, cost management, automation, searching/filtering
-- Tags do NOT affect resource functionality
+- **Key-Value pairs** (metadata) assigned to resources, resource groups, and subscriptions
+- Used for:
+  - **Cost Allocation & Department Tracking**: Filter billing data in Azure Cost Management
+  - **Operations & Automation**: Target specific environments (e.g., `Env: Prod`) in automation scripts
+  - **Resource Organization & Inventory**: Grouping resources without moving them
 
-### Tag Rules
-| Rule | Detail |
-|------|--------|
-| Max tags per resource | **50** |
-| Max tag name length | **512 characters** (128 for storage accounts) |
-| Max tag value length | **256 characters** |
-| Case sensitivity | Tag names are **case-insensitive**, values are **case-sensitive** |
-| Resource groups/subscriptions | Can be tagged (up to 50 tags) |
-| Tag inheritance | Tags do **NOT** automatically inherit to child resources |
+### Core Tagging Rules & Limitations
+| Property | Rule / Limit |
+|----------|--------------|
+| Max tags per resource | **50** tags |
+| Max tag name length | **512** characters (storage accounts: 128 characters) |
+| Max tag value length | **256** characters |
+| Tag name case-sensitivity | **Case-insensitive** (`Department` = `department`) |
+| Tag value case-sensitivity | **Case-sensitive** (`Finance` ≠ `finance`) |
+| Tag inheritance | Tags do **NOT automatically inherit** from resource group to child resources |
+| Resources supporting tags | Almost all ARM resources (classic resources do not support tags) |
 
-> ⚠️ **Tag Inheritance**: Tags on a resource group do **NOT** inherit to resources inside it by default. You must use **Azure Policy** to enforce tag inheritance.
-
-### Common Tag Strategies
-
-| Tag Name | Example Value | Purpose |
-|----------|--------------|---------|
-| Environment | Production, Dev, Test | Environment identification |
-| Department | IT, Finance, HR | Cost allocation |
-| CostCenter | CC-1234 | Billing/chargeback |
-| Owner | john@contoso.com | Accountability |
-| Project | ProjectX | Project tracking |
-| ApplicationName | WebApp-Portal | Application tracking |
-
-### Managing Tags
+> ⚠️ **Tag Inheritance Rule**: Applying a tag to a Resource Group **does not** tag the resources inside it. To enforce tag inheritance down to child resources, you must deploy an **Azure Policy** with the `Modify` or `Append` effect!
 
 ```bash
-# Azure CLI
-# Add tags to a resource group
-az group update --name "myRG" --tags "Environment=Production" "Department=IT"
+# Azure CLI: Add tags to a resource
+az resource tag --tags Department=Finance Environment=Prod --ids <resource-id>
 
-# Add tags to a resource
-az resource tag \
-  --tags "Environment=Production" "Owner=john@contoso.com" \
-  --resource-group "myRG" \
-  --resource-type "Microsoft.Compute/virtualMachines" \
-  --name "myVM"
-
-# List all resources with a specific tag
-az resource list --tag "Environment=Production" --output table
-
-# List tag values for a tag name
-az tag list --output table
+# PowerShell: Update resource tags
+$tags = (Get-AzResource -ResourceGroupName "RG1" -Name "VM1").Tags
+$tags += @{ "CostCenter" = "CC104" }
+Set-AzResource -ResourceId <resource-id> -Tag $tags -Force
 ```
-
-```powershell
-# PowerShell
-# Add tags to resource group
-$tags = @{"Environment"="Production"; "Department"="IT"}
-Set-AzResourceGroup -Name "myRG" -Tag $tags
-
-# Add tags to a resource (replaces all tags)
-$resource = Get-AzResource -ResourceGroupName "myRG" -Name "myVM"
-Set-AzResource -ResourceId $resource.Id -Tag $tags -Force
-
-# Update tags (add without removing existing)
-$resource = Get-AzResource -ResourceGroupName "myRG" -Name "myVM"
-$resource.Tags.Add("NewTag", "NewValue")
-Set-AzResource -ResourceId $resource.Id -Tag $resource.Tags -Force
-```
-
----
-
-## 🔄 Tags + Policy Integration
-
-### Enforce Tags with Azure Policy
-- **Require a tag**: Deny resources without specific tag
-- **Inherit tag from resource group**: Automatically copy RG tags to resources
-- **Require tag value pattern**: Validate tag value format
-
-### Example: Inherit tags from resource group
-```json
-{
-  "effect": "Modify",
-  "details": {
-    "roleDefinitionIds": ["...contributor-role-id..."],
-    "operations": [{
-      "operation": "addOrReplace",
-      "field": "tags['Environment']",
-      "value": "[resourceGroup().tags['Environment']]"
-    }]
-  }
-}
-```
-
----
-
-## 📊 Cost Management with Tags
-
-- Tags enable **cost allocation** by department/project/environment
-- View costs filtered by tags in **Azure Cost Management**
-- Create **budgets** per tag combination
 
 ---
 
 ## 📋 Exam-Ready Facts
 
-| Fact | Value |
-|------|-------|
-| Lock types | **CanNotDelete** and **ReadOnly** |
-| ReadOnly lock prevents | Modify AND delete |
-| CanNotDelete lock prevents | Delete only |
-| Locks override | Even Owner role |
-| Who can create locks | Needs `Microsoft.Authorization/locks/*` permission |
-| Max tags per resource | **50** |
-| Tag name max length | **512 chars** (128 for storage) |
-| Tag inheritance | Does **NOT** inherit automatically |
-| To enforce tag inheritance | Use **Azure Policy** with Modify effect |
-| Tags affect resource behavior | **No** |
+| Fact | Value / Rule |
+|------|--------------|
+| Associating VMs in single RG with departments | Assign **Tags** to the VMs (e.g., `Department: HR`) |
+| Stopping a VM with ReadOnly lock | Blocked / Fails with authorization error |
+| Listing storage keys with ReadOnly lock | Blocked / Fails |
+| Role required to delete a lock | Owner or User Access Administrator (Contributor cannot delete locks) |
+| Tag inheritance behavior | None (requires Azure Policy to propagate) |
+| Max tags per resource | 50 tags |
+| Lock precedence | Most restrictive lock wins (ReadOnly > CanNotDelete) |
 
 ---
 
-## 🚨 Common Exam Scenarios
+## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
-**Q: A storage account has a ReadOnly lock. An admin with Owner permissions tries to add a new blob container. What happens?**
-→ **Blocked** — ReadOnly lock prevents any modification, regardless of RBAC role
+**Q: Your company has several departments. Each department has virtual machines located in a single resource group named RG1. You want to associate each VM with its respective department for cost tracking. What should you do?**
+→ Assign **Tags** to each virtual machine representing their department name (e.g., `Department: Marketing`).
 
-**Q: A developer accidentally deleted a production resource group. How do you prevent this in the future?**
-→ Apply a **CanNotDelete** lock to the resource group
+**Q: An administrator needs to stop and deallocate VM1 to change its size, but the stop action fails with an error. VM1 has no direct locks, but its resource group has a ReadOnly lock. What is the solution?**
+→ The `ReadOnly` lock on the resource group is inherited by VM1 and prevents power state modifications. The administrator must **remove the ReadOnly lock** (or change it to `CanNotDelete`), stop and resize the VM, and then re-apply the lock.
 
-**Q: You want all resources in a resource group to automatically get the same "Environment" tag as the resource group. What do you configure?**
-→ **Azure Policy** with effect **Modify** or **Append** to inherit tags from resource group
+**Q: You need to prevent all developers and administrators from accidentally deleting a production Azure SQL Database, while still allowing developers to modify database schemas and data.**
+→ Apply a **CanNotDelete** lock to the database or its resource group.
 
-**Q: A manager wants to see the monthly cost for the "Finance" department only. What should have been set up?**
-→ **Tags** on all finance resources with "Department=Finance", then filter in Cost Management
-
-**Q: Can an Owner delete a resource that has a CanNotDelete lock on its resource group?**
-→ **No** — they must first **remove the lock**, then delete. Both actions require lock management permission.
+**Q: A team adds a tag `CostCenter: 104` to a resource group named RG1. When viewing the cost analysis of the virtual machines inside RG1, the tag is missing. Why?**
+→ Tags on a resource group **do not inherit** to child resources automatically. You must either manually tag the VMs or assign an **Azure Policy** to inherit the tag.

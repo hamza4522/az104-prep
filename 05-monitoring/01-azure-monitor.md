@@ -1,164 +1,66 @@
-# Azure Monitor
+# Azure Monitor & Activity Log
 
 > 🎯 Exam Weight: Part of 10–15% Monitoring domain
 
 ---
 
-## 🔑 What is Azure Monitor?
+## 🔑 Azure Monitor Data Platform
 
-- **Centralized monitoring platform** for all Azure resources
-- Collects: metrics, logs, traces, and activity logs
-- Provides: dashboards, alerts, autoscale, workbooks, insights
-
-### Azure Monitor Data Types
-| Type | Description | Storage |
-|------|-------------|---------|
-| **Metrics** | Numerical time-series data (CPU%, requests/sec) | Azure Monitor Metrics database |
-| **Logs** | Text-based records, structured (JSON) | Log Analytics Workspace |
-| **Activity Log** | Subscription-level operations (who did what, when) | Azure Monitor (90 days), can archive |
-| **Resource Logs** | Diagnostic logs from Azure resources | Log Analytics, Storage, Event Hub |
-
----
-
-## 📊 Azure Monitor Metrics
-
-### What Are Metrics?
-- **Numerical values** collected at regular intervals
-- Examples: CPU percentage, disk IOPS, network in/out, request count
-- Retained for **93 days** in Azure Monitor
-- For longer retention → send to **Log Analytics**
-
-### Key Metrics Tools
-| Tool | Description |
-|------|-------------|
-| **Metrics Explorer** | Visualize metrics, create charts |
-| **Metric Alerts** | Alert when metric exceeds threshold |
-| **Autoscale** | Scale resources based on metrics |
-
-### Platform Metrics vs Custom Metrics
-| Type | Description |
-|------|-------------|
-| **Platform metrics** | Automatically collected from Azure resources (no config) |
-| **Custom metrics** | Application-defined metrics sent via API or Application Insights |
-
----
-
-## 📋 Activity Log
-
-### What It Is
-- Records **control plane operations** on Azure resources
-- Answers: Who did what, on which resource, when
-- Retained for **90 days** by default in Azure Monitor
-- Archive to Storage Account or send to Log Analytics for longer retention
-
-### Activity Log Event Categories
-| Category | Description |
-|----------|-------------|
-| **Administrative** | Create, update, delete, action operations |
-| **Security** | Azure Defender alerts |
-| **ServiceHealth** | Azure service incidents |
-| **ResourceHealth** | Resource health changes |
-| **Alert** | Azure Monitor alerts firing |
-| **Autoscale** | Autoscale actions |
-| **Policy** | Azure Policy evaluation results |
-| **Recommendation** | Advisor recommendations |
-
-### Common Activity Log Query
-```kql
-// Find all delete operations in last 24 hours
-AzureActivity
-| where OperationNameValue endswith "DELETE"
-| where TimeGenerated > ago(24h)
-| project TimeGenerated, Caller, ResourceGroup, Resource, ActivityStatusValue
+```
+[Sources: Apps, VMs, OS, Resources, Subscriptions, Tenant]
+                             │
+                             ▼
+                    [Azure Monitor Engine]
+                             │
+            ┌────────────────┴────────────────┐
+            ▼                                 ▼
+      [Metrics]                            [Logs]
+  Lightweight numbers               Structured records & events
+  Time-series DB                    Log Analytics (KQL)
+  Retained: 93 days                 Retained: 30–730 days
 ```
 
 ---
 
-## 🔍 Diagnostic Settings
+## 📜 Azure Activity Log (Subscription Control Plane)
 
-### What Are They?
-- Configure **where resource logs and metrics are sent**
-- Must be configured on each resource (not automatic for logs)
-- Destinations:
-  | Destination | Use Case |
-  |-------------|---------|
-  | **Log Analytics Workspace** | Query, alert, long-term analysis |
-  | **Storage Account** | Archive, compliance |
-  | **Event Hub** | Stream to SIEM or external tools |
-  | **Azure Monitor Partner** | Third-party integrations |
-
-```bash
-# Create diagnostic setting for a VM (send to Log Analytics)
-az monitor diagnostic-settings create \
-  --name myDiagSettings \
-  --resource {vm-resource-id} \
-  --workspace {log-analytics-workspace-id} \
-  --metrics '[{"category":"AllMetrics","enabled":true}]' \
-  --logs '[{"category":"Administrative","enabled":true}]'
-```
+- Automatically records **control-plane events** across the entire subscription:
+  - Who created, updated, or deleted a resource
+  - When a virtual machine was started, stopped, or restarted
+  - Modifications to Network Security Groups, Route Tables, and RBAC roles
+- **Retention**: **90 days** of history included free of charge
+- **Long-Term Retention Requirement**:
+  - To retain Activity Logs for > 90 days (e.g. 1 year, 7 years for compliance): Create a **Diagnostic Setting** on the Activity Log and export to an **Azure Storage Account** or **Log Analytics Workspace**.
 
 ---
 
-## 📈 Azure Monitor Workbooks
+## ⚙️ Diagnostic Settings (Resource Logs & Metrics)
 
-- **Interactive reports** combining text, queries, metrics, and parameters
-- Create custom dashboards for stakeholders
-- Templates available for common scenarios
-
----
-
-## 🔍 Application Insights
-
-### What It Is
-- APM (Application Performance Monitoring) service
-- Monitor your **application code** (not just infrastructure)
-- Part of Azure Monitor
-
-### What It Tracks
-| Data | Description |
-|------|-------------|
-| **Requests** | HTTP requests, response times, failure rates |
-| **Dependencies** | Calls to databases, external APIs, storage |
-| **Exceptions** | Unhandled exceptions and stack traces |
-| **Page views** | Client-side telemetry |
-| **Custom events** | Application-specific events |
-| **Performance counters** | Server-side CPU, memory |
-
-### Application Map
-- Visual diagram of application components and their dependencies
-- Shows where failures and slowdowns occur
-
-### Live Metrics
-- Real-time stream of application telemetry
-- Instant view of requests, failures, CPU
+Platform logs are not collected until a **Diagnostic Setting** is configured on the resource.
+Supported Destinations:
+1. **Log Analytics Workspace**: For querying with KQL and creating complex log search alerts.
+2. **Azure Storage Account**: For low-cost long-term archival and compliance auditing.
+3. **Event Hub**: For real-time streaming into third-party SIEM tools (Splunk, QRadar, Datadog).
+4. **Partner Solutions**: Direct ingestion into Azure native partner ISVs.
 
 ---
 
 ## 📋 Exam-Ready Facts
 
-| Fact | Value |
-|------|-------|
-| Metrics retention | **93 days** in Azure Monitor |
-| Activity Log retention | **90 days** by default |
-| Logs stored in | **Log Analytics Workspace** |
-| Diagnostic settings configure | Where resource logs are sent |
-| Activity Log captures | Control plane operations (who did what) |
-| Application Insights for | **Application-level** monitoring |
-| Custom metrics | Sent via API or Application Insights SDK |
-| Metrics Explorer for | Visualizing numerical metrics |
+| Fact | Value / Rule |
+|------|--------------|
+| Activity Log default retention | **90 days** (included free) |
+| Metrics default retention | **93 days** |
+| Retaining Activity Logs for 1+ years | Configure **Diagnostic Setting** to Azure Storage Account |
+| View who deleted a resource | **Activity Log** |
+| Export destination for SIEM streaming | **Azure Event Hub** |
 
 ---
 
-## 🚨 Common Exam Scenarios
+## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
-**Q: An admin accidentally deleted a resource group. How do you find out who did it and when?**
-→ **Activity Log** — search for DELETE operations on the resource group
+**Q: A virtual machine was accidentally deleted last night. You need to identify which administrator initiated the deletion operation.**
+→ Open the Azure **Activity Log**, filter the operation by "Delete Virtual Machine", and review the **Event initiated by** field.
 
-**Q: You need to keep VM performance metrics for 2 years for compliance. What do you configure?**
-→ Send metrics via **Diagnostic Settings** to a **Storage Account** (metrics only retained 93 days in Monitor natively)
-
-**Q: An application is experiencing slowdowns. You need to see which database calls are taking too long. What do you use?**
-→ **Application Insights** — dependency tracking shows slow database calls
-
-**Q: You want to create a custom dashboard showing CPU and memory metrics across 50 VMs in one view. What do you use?**
-→ **Azure Monitor Workbooks** or **Azure Dashboards** using Metrics Explorer pinned charts
+**Q: An organization's compliance policy requires all subscription activity events to be retained for at least 365 days.**
+→ Create a **Diagnostic Setting** for the Activity Log and configure an **Azure Storage Account** as the export destination with a retention of 365 days.

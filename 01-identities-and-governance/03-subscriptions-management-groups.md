@@ -7,12 +7,12 @@
 ## 🔑 Azure Hierarchy Overview
 
 ```
-Azure Account (root)
-    └── Azure AD Tenant
-            └── Management Groups  ← organize subscriptions
-                    └── Subscriptions  ← billing boundary
-                            └── Resource Groups  ← logical containers
-                                    └── Resources  ← actual services
+Azure Account (Enterprise / MCA / Direct)
+    └── Azure AD Tenant (Identity Boundary)
+            └── Management Groups  ← Policy & RBAC inheritance boundary
+                    └── Subscriptions  ← Billing & Quota boundary
+                            └── Resource Groups  ← Lifecycle & Management boundary
+                                    └── Resources  ← Individual Azure services
 ```
 
 ---
@@ -21,31 +21,29 @@ Azure Account (root)
 
 ### What They Are
 - Containers that help **manage access, policy, and compliance** across multiple subscriptions
-- Used when organizations have **many subscriptions**
-- Policies and RBAC applied to a management group **inherit** to all child subscriptions
+- Policies and RBAC applied to a management group **inherit** to all child management groups and subscriptions
 
-### Key Facts
-| Fact | Value |
-|------|-------|
-| Default root management group | **Tenant Root Group** (auto-created) |
-| Max depth of hierarchy | **6 levels** (not counting root) |
-| Max management groups in a directory | **10,000** |
-| Each subscription can be in | **Only 1 management group** |
-| Management groups can be nested | Yes |
-
-### Management Group Use Cases
-- Apply a **policy** requiring all subscriptions to use specific regions
-- Assign **RBAC roles** across all subscriptions at once
-- Provide a **unified view** across the entire Azure estate
+### Key Facts & Architecture Rules
+| Fact | Value / Rule |
+|------|--------------|
+| Root Management Group | **Tenant Root Group** (auto-created for every tenant) |
+| Max Depth of Hierarchy | **6 levels** (excluding the Root group) |
+| Max Management Groups | Up to **10,000** in a single directory |
+| Subscription Membership | Each subscription can belong to **only one** management group at a time |
+| Direct Resource Placement | Resources **cannot** be placed directly inside a management group (only other MGs or Subscriptions) |
+| New Subscriptions Placement | Automatically placed under the **Tenant Root Group** (unless a default MG is explicitly configured) |
 
 ```bash
-# CLI: Create a management group
+# Azure CLI: Create a management group
 az account management-group create --name "ProdMG" --display-name "Production"
 
-# CLI: Move a subscription to a management group
+# Azure CLI: Move a subscription into a management group
 az account management-group subscription add \
   --name "ProdMG" \
   --subscription "00000000-0000-0000-0000-000000000000"
+
+# PowerShell: Move a subscription to a management group
+New-AzManagementGroupSubscription -GroupId "ProdMG" -SubscriptionId "00000000-0000-0000-0000-000000000000"
 ```
 
 ---
@@ -53,133 +51,68 @@ az account management-group subscription add \
 ## 💳 Azure Subscriptions
 
 ### What They Are
-- **Billing boundary** — each subscription has its own invoice
-- **Access control boundary** — RBAC is applied per subscription
-- A subscription is always tied to **one Azure AD tenant**
+- **Billing boundary**: Invoices, payment methods, and cost tracking occur at the subscription level
+- **Quota & Limit boundary**: Resource limits (vCPU cores, VMs, IPs) are allocated per subscription
+- A subscription is always associated with **exactly one Azure AD tenant** at any given time
 
-### Types of Subscriptions
-| Type | Description |
-|------|-------------|
-| **Free** | $200 credit for 30 days, then limited free services |
-| **Pay-As-You-Go** | Charged monthly for what you use |
-| **Enterprise Agreement (EA)** | Large org, committed spend, discounted rates |
-| **CSP (Cloud Solution Provider)** | Purchased through a Microsoft partner |
-
-### Subscription Limits (Soft Limits — can be increased)
-| Resource | Default Limit |
-|----------|--------------|
-| VMs per region | 25,000 |
-| VNets per region | 1,000 |
-| Resource Groups | 980 |
-| vCPU per region | 20 (default) |
-
-> ⚠️ **Exam Gotcha**: Subscription limits are **soft limits** that can be increased by contacting Microsoft support. **Hard limits** cannot be increased.
-
-### Moving Subscriptions
-- Subscriptions can be moved to a **different management group**
-- Subscriptions can be transferred to a **different Azure AD tenant**
-- Resources can be moved between resource groups or subscriptions using **Move-AzResource**
+### Transferring Subscriptions to a Different Tenant
+When ownership of a subscription is transferred to a different Azure AD tenant:
+- ✅ **Resources remain running**: VMs, databases, and storage accounts continue functioning without downtime
+- ❌ **RBAC role assignments are removed**: All role assignments in the source tenant are dropped
+- ❌ **Custom roles are not transferred**: They remain in the original tenant directory
+- ⚠️ **Key Vault access must be reconfigured**: Key Vaults remain associated with the old tenant ID until explicitly updated via CLI/PowerShell (`az keyvault update --name <kv> --resource-group <rg> --subscription <sub-id>`)
+- ⚠️ **User access**: Source tenant users lose all access until roles are assigned in the new tenant
 
 ---
 
 ## 📦 Resource Groups
 
-### What They Are
-- **Logical containers** for Azure resources
-- Resources in a group are typically deployed, managed, and deleted together
-- A resource can only be in **one resource group** at a time
+### Key Characteristics
+- **Logical container** for resources sharing the same lifecycle (deployed, updated, and deleted together)
+- Every resource must exist in **exactly one** resource group
+- **Region Independence**: The resource group location specifies where its *metadata* is stored; resources inside the group can be in **different regions**
+- **Deleting a Resource Group**: Deleting an RG initiates cascading deletion of **all** resources inside it
 
-### Key Rules
-| Rule | Detail |
-|------|--------|
-| Location of resource group | Metadata storage location — resources can be in different regions |
-| Deleting a resource group | Deletes **all** resources inside it |
-| Moving resources | Resources can be moved between resource groups |
-| Resource group can span regions | Yes — group has one location but can contain resources in many regions |
-| Resources can communicate across groups | Yes, across groups and even subscriptions |
-
-### Moving Resources Between Groups/Subscriptions
-```powershell
-# PowerShell
-Move-AzResource -ResourceId $resource.ResourceId `
-  -DestinationResourceGroupName "NewRG" `
-  -DestinationSubscriptionId "new-sub-id"
-```
-
+### Moving Resources Between Groups or Subscriptions
 ```bash
-# Azure CLI
-az resource move \
-  --destination-group "NewRG" \
-  --ids "/subscriptions/{sub}/resourceGroups/OldRG/providers/..."
+# CLI: Move resources to a different resource group
+az resource move --destination-group "TargetRG" --ids <resource-ids>
+
+# PowerShell: Move resources to a different subscription
+Move-AzResource -DestinationSubscriptionId "11111111-1111-1111-1111-111111111111" -DestinationResourceGroupName "TargetRG" -ResourceId <resource-ids>
 ```
 
-> ⚠️ **Not all resources can be moved!** Some resources like Azure Active Directory Domain Services, Recovery Services vaults with VMs, VNets with certain resources have restrictions.
-
----
-
-## 💰 Cost Management
-
-### Azure Cost Management + Billing
-- Tool for **monitoring, allocating, and optimizing** Azure costs
-- View costs by: subscription, resource group, resource, tag, time period
-
-### Budgets
-- Set spending thresholds and get **alerts** when approaching/exceeding
-- Can set alerts at **actual cost** or **forecasted cost**
-- Alerts do NOT automatically stop resources (you need automation for that)
-
-### Cost Optimization Features
-| Feature | Description |
-|---------|-------------|
-| **Azure Reservations** | Pre-pay 1 or 3 years → up to 72% savings |
-| **Azure Hybrid Benefit** | Use existing Windows Server/SQL licenses → up to 49% savings |
-| **Spot Instances** | Unused Azure capacity at up to 90% discount; can be evicted |
-| **Dev/Test Pricing** | Lower rates for non-production workloads |
-
----
-
-## 🏷️ Tagging
-
-(See also: [Resource Locks & Tags](./05-resource-locks-tags.md))
-
-- Tags are **name-value pairs** applied to resources, resource groups, or subscriptions
-- Used for: cost allocation, automation, organization, searching
-
-```bash
-# CLI: Add tag to resource group
-az group update --name "myRG" --tags "Environment=Production" "Department=IT"
-
-# CLI: List resources by tag
-az resource list --tag "Environment=Production"
-```
+> ⚠️ **Resource Move Rules**:
+> 1. Source and target resource groups are **locked** during the move operation.
+> 2. You cannot move resources that have specific dependencies (e.g., VPN Gateways, Recovery Services Vaults with backed-up items, or certain App Service certificates without moving the plan).
+> 3. Moving a VM requires moving all its associated disks and network interfaces together.
 
 ---
 
 ## 📋 Exam-Ready Facts
 
-| Fact | Value |
-|------|-------|
-| Tenant Root Group | Auto-created, cannot be deleted or moved |
-| Management group hierarchy depth | 6 levels max (below root) |
-| Subscriptions per management group | Unlimited |
-| One subscription belongs to | ONE management group |
-| Resource group can span | Multiple regions |
-| Resource group deletion | Deletes ALL resources inside |
-| Resource can be in | ONE resource group only |
-| Budget alerts stop resources? | **No** — alerts only, no automatic stopping |
+| Fact | Value / Rule |
+|------|--------------|
+| Hierarchy depth limit | 6 levels (excluding root) |
+| Max management groups per directory | 10,000 |
+| Subscription-to-tenant relationship | 1 subscription trusts 1 tenant (1 tenant can have many subscriptions) |
+| Moving subscription to new tenant | All RBAC role assignments are deleted |
+| Resource group metadata vs resource region | Resource group location is metadata-only; resources can reside in different regions |
+| Deleting resource group | Permanently deletes all child resources |
+| Soft limit increases | Request through Azure Support portal (e.g., regional vCPU quota increases) |
 
 ---
 
-## 🚨 Common Exam Scenarios
+## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
-**Q: A company has 50 subscriptions. They want to enforce a policy that all resources must be in US regions only. What's the most efficient approach?**
-→ Create a **Management Group**, move all subscriptions into it, apply an **Azure Policy** at the management group level
+**Q: You need to apply a corporate compliance policy and assign permissions across 12 subscriptions managed by different departments.**
+→ Create a **Management Group**, place the 12 subscriptions inside the group, and assign the policy and RBAC roles at the **Management Group scope**.
 
-**Q: A developer accidentally deleted a resource group with important VMs. What happened?**
-→ All resources in that resource group were deleted. No automatic recovery unless **Azure Backup** was configured.
+**Q: An organization transfers an Azure subscription containing virtual machines and storage accounts to a new Azure AD directory. What happens to existing RBAC permissions?**
+→ All existing RBAC role assignments are **removed**. Administrators in the target tenant must re-assign roles to users and groups in the new directory.
 
-**Q: You need to track which team owns each Azure resource for billing purposes. What do you implement?**
-→ **Tags** — apply a "Team" or "CostCenter" tag to all resources
+**Q: A developer cannot deploy more than 20 vCPUs in the East US region in a new Pay-As-You-Go subscription. What should you do?**
+→ Create a **Support Request** in the Azure portal to request a quota increase for vCPU cores in that region.
 
-**Q: An organization wants to move a subscription from one tenant to another. Is this possible?**
-→ **Yes**, subscriptions can be transferred to a different Azure AD tenant, but all role assignments are lost during transfer.
+**Q: You have resources deployed in West Europe inside a resource group whose location is set to North Europe. If North Europe experiences a regional outage, what is the effect?**
+→ The resources in West Europe continue to **run normally**. Only management operations (reading resource group metadata or deploying new resources into that RG) may be temporarily impacted.
