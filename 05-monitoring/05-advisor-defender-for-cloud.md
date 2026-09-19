@@ -40,3 +40,25 @@ Azure Advisor analyzes resource telemetry and configurations to provide personal
 
 **Q: A company wants to quickly identify underutilized virtual machines across 10 subscriptions that can be resized or shut down to minimize monthly billing.**
 → In the Azure portal, open **Azure Advisor** and review the **Cost** recommendations.
+
+**Q: You regularly create and delete virtual machines and need to identify unattached disks that can be deleted.**
+→ From **Azure Cost Management + Billing**, select **Cost Management** → **Advisor Recommendations** to see a list of orphaned/unattached disks.
+
+---
+
+## 💾 Azure Backup: Supported Platforms
+
+| Platform | Supported? | Notes |
+|----------|-----------|-------|
+| Windows Server 2008+ (64-bit) | ✅ | All editions |
+| Windows 10 (64-bit) | ✅ | |
+| Ubuntu Server 12.04+ (64-bit) | ✅ | |
+| Offline/Stopped VMs | ✅ | Backup does not require VM to be running |
+
+> 💡 **Exam Gotcha**: You can back up **offline/stopped virtual machines** with Azure Backup. The vault must be in the same region as the VM.
+
+### Backup Requirements for VMs Across Regions
+- A Recovery Services vault protects only resources in its **same region**
+- To protect VMs in a different region, create a **new Recovery Services vault** in that region
+
+

@@ -53,6 +53,19 @@ Auto-registers VM hostnames        Resolves records; NO auto-register
 
 ---
 
+## 🌐 DNS Delegation
+
+### Delegating a Public Domain to Azure DNS
+- When you create a public Azure DNS zone (e.g., `contoso.com`), Azure provides 4 Name Server (NS) records
+- To make the zone authoritative on the internet, you must **update the NS records at your domain registrar** to point to Azure's name servers
+
+### Delegating a Subdomain to a Different Azure DNS Server
+- To delegate `research.adatum.com` to a different DNS server:
+  → Create an **NS record** named `research` in the `adatum.com` parent zone pointing to the target name servers
+  → Do NOT use a PTR, A, or SOA record — only NS records delegate authority
+
+---
+
 ## 📋 Exam-Ready Facts
 
 | Fact | Value / Rule |
@@ -61,7 +74,9 @@ Auto-registers VM hostnames        Resolves records; NO auto-register
 | Resolution VNets per Private DNS Zone | Up to **1,000** VNets |
 | Apex domain record pointing to Azure PaaS | **Alias record** (CNAME cannot be apex) |
 | Delegating public domain to Azure DNS | Update **NS records** at domain registrar |
+| Delegating a subdomain to another server | Create **NS record** for the subdomain in the parent zone |
 | Auto-registration record lifecycle | When a VM is deleted, its DNS record is automatically removed |
+| Private DNS auto-registration | Only VMs in the **Registration VNet** auto-register |
 
 ---
 
@@ -75,3 +90,12 @@ Auto-registers VM hostnames        Resolves records; NO auto-register
 
 **Q: You delegate a public domain `contoso.com` to Azure DNS. What records must you configure at your domain registrar?**
 → Configure the 4 Azure DNS **Name Server (NS) records** provided in the Azure DNS zone overview.
+
+**Q: You have a public Azure DNS zone named `contoso.com`. Records created in the zone are not resolvable from the internet. What should you do?**
+→ **Modify the NS records at the domain name registrar** to point to the Azure DNS name servers. The zone itself is fine, but the registrar is still pointing to the old DNS servers.
+
+**Q: You need to delegate the subdomain `research.adatum.com` to a different DNS server in Azure. What should you create in the `adatum.com` zone?**
+→ Create an **NS record** named `research` in the `adatum.com` parent zone. NS records are used for subdomain delegation — NOT PTR, A, or SOA records.
+
+**Q: You need to ensure that users with @contoso.com UPNs can be created in Azure AD. You own the domain at a third-party registrar. What three steps do you perform in sequence?**
+→ 1) **Add the custom domain** to your Azure AD directory. 2) **Add a DNS TXT/MX record** at the domain name registrar. 3) **Verify the custom domain** in Azure AD.

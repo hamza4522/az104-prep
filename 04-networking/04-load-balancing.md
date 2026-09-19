@@ -62,8 +62,6 @@
 
 ---
 
-## 🚨 Common Exam Scenarios (Real Exam MCQs)
-
 **Q: You have an Azure Load Balancer named LB1 servicing a backend pool of web servers. You need to ensure that visitors are serviced by the same web server for each request.**
 → Modify the Load Balancing rule and change **Session Persistence** from None to **Client IP**.
 
@@ -72,3 +70,21 @@
 
 **Q: You deploy a Standard Load Balancer with an internal frontend IP, but virtual machines in the backend pool cannot receive traffic. What is missing?**
 → Standard Load Balancers are **secure by default**. You must associate a **Network Security Group (NSG)** with the subnet or NICs and add an inbound allow rule for the service port.
+
+**Q: You need to load balance traffic between web servers and a business logic tier (internal), and protect web servers from SQL injection attacks.**
+→ Use an **Internal Load Balancer** for east-west traffic balancing between tiers, and an **Application Gateway with the WAF tier** for protection against SQL injection.
+
+**Q: You need to create inbound NAT rules to provide Remote Desktop access to VM1 and VM2 on port 3389. What must you create first on LB1?**
+→ A **frontend IP address** — NAT rules require a frontend IP address to be configured before inbound NAT rules can be created.
+
+---
+
+## 🔁 Standard LB: HA Ports & Floating IP (for NVA Scenarios)
+
+| Feature | Description | Exam Use Case |
+|---------|-------------|---------------|
+| **HA Ports** | Load balance ALL ports and ALL protocols simultaneously | NVAs in active-active configurations inspecting all traffic |
+| **Floating IP** (Direct Server Return) | Backend VM receives packet with the original destination IP (not the LB frontend IP) | When backend ports must be reused across multiple rules |
+| **Standard SKU required** | HA Ports are NOT available on Basic Load Balancer | Always use Standard LB for NVA HA scenarios |
+
+> 💡 **NVA Active-Active HA Scenario**: Deploy **Standard Load Balancer** + **HA Ports enabled** + **Floating IP enabled** + multiple backend pools for different service IPs.

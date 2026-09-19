@@ -214,3 +214,50 @@ device.deviceOSVersion -startsWith "10.0"
 
 **Q: An administrator accidentally deletes a critical user account. How can it be recovered?**
 → Restore the user from the **Deleted users** container in Azure AD within **30 days**. All previous group memberships and permissions are restored automatically.
+
+**Q: You need to create groups that will grant 3 users access to a SharePoint library and must auto-delete after 180 days. Which group types support this?**
+→ Only **Microsoft 365 groups** support expiration policies. Create either:
+  - A **Microsoft 365 group (Assigned membership)**, OR
+  - A **Microsoft 365 group (Dynamic User membership)**
+  - ⚠️ Security groups do NOT support expiration policies.
+
+**Q: Admin1 (User Administrator role) tries to invite external partner user1@outlook.com and gets "Generic authorization exception". What should you do?**
+→ From the **Users blade**, modify the **External collaboration settings** — configure who can invite guests (All users / Member users only / Admins only).
+
+**Q: You have hybrid users (synced from on-premises AD). For which users can you modify the JobTitle attribute directly from Azure AD?**
+→ Only **cloud-only users** (created in Azure AD) can have JobTitle modified directly in Azure AD. For synced users whose source is **Windows Server AD**, you must modify the attribute in the **on-premises Active Directory** — the change will then sync to Azure AD.
+
+---
+
+## 👥 Group Expiration Policy
+
+| Group Type | Supports Expiration Policy? |
+|------------|---------------------------|
+| **Microsoft 365 group** | ✅ Yes — can be configured to auto-delete after N days |
+| **Security group (Assigned)** | ❌ No |
+| **Security group (Dynamic)** | ❌ No |
+
+> 💡 **Exam Gotcha**: Expiration policies apply **only to Microsoft 365 groups** in Azure AD. Security groups of any membership type do NOT support expiration.
+
+---
+
+## 🌐 External Collaboration (B2B Guest Users)
+
+- Governed by **External collaboration settings** in Azure AD (Users blade)
+- Controls:
+  - **Guest user access restrictions**: What guests can see in the directory
+  - **Guest invite settings**: Who can invite external users (All users / Member users only / Admins and guest inviters only / No one)
+- **Default**: Only Global Administrators and Guest Inviters can send invitations
+
+> 💡 **Exam Tip**: If a User Administrator gets "Generic authorization exception" when inviting a guest → Go to **External collaboration settings** and change "Guest invite restrictions" to allow member users to invite.
+
+---
+
+## 🔄 Hybrid Identity: Attribute Editing Rules
+
+| User Source | Can Edit in Azure AD? | Must Edit Where? |
+|-------------|----------------------|-----------------|
+| **Cloud-only** (created in Azure AD) | ✅ Yes | Azure AD portal |
+| **Synced from on-premises AD** | ❌ No for most identity/contact/job attributes | **On-premises Active Directory** (then syncs to Azure AD) |
+| **UsageLocation** | ✅ Yes for all users | Azure AD (needed for license assignment) |
+

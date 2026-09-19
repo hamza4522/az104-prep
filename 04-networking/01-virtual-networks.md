@@ -77,13 +77,62 @@ Connects two VNets directly over the Microsoft private backbone network:
 
 ---
 
-## 🚨 Common Exam Scenarios (Real Exam MCQs)
-
-**Q: You plan to create a new subnet in VNet1 that will host 10 virtual machines. What is the smallest CIDR subnet mask you can use?**
-→ A **/28** subnet. It provides 16 total IP addresses: 16 - 5 reserved = 11 usable host IPs (enough for 10 VMs).
-
 **Q: VNet1 is peered with VNet2. VNet2 is peered with VNet3. Virtual machines in VNet1 cannot communicate with virtual machines in VNet3. Why?**
 → Virtual Network Peering is **non-transitive**. VNet1 cannot communicate with VNet3 through VNet2 without a Network Virtual Appliance (NVA) and User Defined Routes.
 
 **Q: You need to allow branch office users connected to Azure via a Site-to-Site VPN in VNet-Hub to access virtual machines in a peered VNet named VNet-Spoke1.**
 → In VNet-Hub peering settings, enable **Allow gateway transit**. In VNet-Spoke1 peering settings, enable **Use remote gateways**.
+
+---
+
+## 🔀 IP Forwarding (NVA Configuration)
+
+For a virtual machine acting as a **Network Virtual Appliance (NVA)** — such as a router or firewall — you must enable **IP Forwarding** on its network interface.
+
+| Setting | Location | Purpose |
+|---------|----------|---------|
+| **IP Forwarding on NIC** | VM Network Interface | Allows NIC to receive traffic NOT destined for its own IP and forward it to other destinations |
+
+> ⚠️ **Exam Gotcha**: IP Forwarding must be enabled on **every NIC** that the NVA uses to forward traffic. Without it, Azure will drop packets not addressed to the NIC's own IPs.
+
+---
+
+## 🌐 Azure Virtual WAN
+
+Azure Virtual WAN provides **optimized, automated branch connectivity** to Azure and through Azure across multiple datacenters.
+
+| Use Case | Architecture |
+|----------|-------------|
+| Connect multiple on-premises datacenters to Azure | Create **one Virtual WAN** + **multiple Virtual Hubs** (one per region/datacenter) |
+| Minimize latency between datacenters | Virtual WAN uses Microsoft global backbone for routing |
+
+> 💡 **Exam Tip (Q9)**: To connect 3 on-premises datacenters (Miami, Los Angeles, New York) to Azure with minimal latency → Create **3 Virtual WANs and 1 virtual hub** OR **3 virtual hubs and 1 virtual WAN**.
+
+---
+
+## 📋 Exam-Ready Facts (Supplemental)
+
+| Fact | Value / Rule |
+|------|--------------| 
+| Public + Private IP on same NIC | ✅ **Yes** — Both can be assigned to a single NIC |
+| Same NSG applied to multiple subnets | ✅ **Yes** — One NSG can be associated to many subnets/NICs |
+| IP Forwarding requirement for NVA | Must enable **IP Forwarding** on the NVA's NIC |
+| P2S VPN config after new peering | Must **re-download and re-install** VPN client config package |
+| VNet Peering address space restriction | Address spaces must **NOT overlap** |
+| VNet scope | Single **Region** and **Subscription** |
+
+---
+
+## 🚨 Common Exam Scenarios (Real Exam MCQs — Supplemental)
+
+**Q: A VM (VM3) acting as a router is not forwarding traffic between Subnet1 and Subnet2 even though a route table is configured.**
+→ Enable **IP Forwarding** on VM3's network interface (NIC3). Without this, Azure drops packets not addressed to the VM's own IPs.
+
+**Q: You add VNet peering between VNet1 and VNet2. A Point-to-Site VPN client (Client1) connected to VNet1 cannot reach VNet2.**
+→ Download and **re-install the VPN client configuration package** on Client1. The P2S config must be regenerated to include the new peering routes.
+
+**Q: Five VMs each need a public and private IP address. What is the minimum number of network interfaces needed?**
+→ **5 NICs** (one per VM — each NIC can have both a public and private IP address).
+
+**Q: Five VMs each need the same inbound/outbound security rules. What is the minimum number of NSGs needed?**
+→ **1 NSG** — The same NSG can be associated with multiple subnets or network interfaces.

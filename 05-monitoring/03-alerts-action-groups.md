@@ -45,6 +45,7 @@
 | Suppress alerts during maintenance | **Alert Processing Rules** (Suppression) |
 | Immediate alert on resource deletion | **Activity Log Alert** |
 | Email notifications target | Azure AD role members or specific email addresses |
+| Action Group ARM Role email recipients | **Users only** — Azure AD **groups and service principals** do NOT receive email |
 
 ---
 
@@ -55,3 +56,6 @@
 
 **Q: You need to receive an immediate email notification whenever any administrator deletes a network security group in Subscription1.**
 → Create an **Activity Log Alert** with the event name "Delete Network Security Group".
+
+**Q: An action group named AG1 uses the "Email Azure Resource Manager Role" notification type targeting the Monitoring Reader role. User1 is a user, Principal1 is a service principal, and Group1 is an Azure AD group — all assigned the Monitoring Reader role. Who receives email when Alert1 fires?**
+→ **User1 only.** Email is sent only to Azure AD **user members** of the role. Groups and service principals do NOT receive email notifications from action groups.

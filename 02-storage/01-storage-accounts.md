@@ -1,84 +1,92 @@
-# Azure Storage Accounts
+# Storage Accounts
 
 > 🎯 Exam Weight: Part of 15–20% Storage domain
 
 ---
 
-## 🔑 What is a Storage Account?
+## 🔑 Storage Account Types
 
-- A top-level **ARM resource container** for all Azure Storage data services: Blobs, Files, Queues, Tables, and Disks
-- Every storage object has a **unique URL** based on the globally unique account name
-- **Naming Constraints**:
-  - Globally unique across all of Azure
-  - Length: **3 to 24 characters**
-  - Allowed characters: **Lowercase letters and numbers only** (no hyphens, underscores, or uppercase)
+| Account Type | Supported Services | Performance | Access Tiers | Replication Options |
+|--------------|--------------------|-------------|-------------|---------------------|
+| **General Purpose v2 (GPv2)** | Blob, File, Queue, Table, Data Lake | Standard / Premium | Hot, Cool, Archive | LRS, ZRS, GRS, RA-GRS, GZRS, RA-GZRS |
+| **General Purpose v1 (GPv1)** | Blob, File, Queue, Table | Standard / Premium | ❌ No tiering | LRS, GRS, RA-GRS |
+| **BlobStorage** | Block blobs only | Standard | Hot, Cool, Archive | LRS, GRS, RA-GRS |
+| **BlockBlobStorage** | Block blobs, Append blobs | **Premium** only | ❌ No tiering | LRS, ZRS |
+| **FileStorage** | Azure Files only | **Premium** only | ❌ No tiering | LRS, ZRS |
 
-### Endpoint URLs
-```
-Blob Service:   https://<account>.blob.core.windows.net/<container>/<blob>
-File Service:   https://<account>.file.core.windows.net/<share>/<file>
-Queue Service:  https://<account>.queue.core.windows.net/<queue>
-Table Service:  https://<account>.table.core.windows.net/<table>
-Secondary (RA): https://<account>-secondary.blob.core.windows.net
-```
+> ⚠️ **Exam Gotcha**: **BlockBlobStorage** requires **Premium** performance tier. If your settings show Standard performance, you must change to Premium **first** before selecting BlockBlobStorage as the account kind.
+
+> 💡 **GPv2 is recommended** for most scenarios — it supports all latest features at the lowest per-GB pricing.
 
 ---
 
-## 📦 Storage Account Types & Supported Features
+## 🔄 Storage Redundancy Options
 
-| Account Type | Data Services | Performance Tier | Primary Use Case |
-|--------------|---------------|------------------|------------------|
-| **General-purpose v2 (GPv2)** | Blob, File, Queue, Table, Data Lake Gen2 | Standard (HDD) | Default recommendation for modern cloud workloads |
-| **Premium block blobs** | Block blobs & Append blobs only | Premium (SSD) | High transactions, consistent low latency (analytics) |
-| **Premium file shares** | Azure Files (SMB / NFS) only | Premium (SSD) | Enterprise file shares, low-latency IOPS workloads |
-| **Premium page blobs** | Page blobs only | Premium (SSD) | Unmanaged VM OS & data disks |
+| Redundancy | Copies | Scope | Sync/Async | Secondary Read? |
+|-----------|--------|-------|------------|-----------------|
+| **LRS** (Locally Redundant) | **3** copies | Single datacenter | Synchronous | ❌ |
+| **ZRS** (Zone Redundant) | **3** copies | 3 availability zones in 1 region | Synchronous | ❌ |
+| **GRS** (Geo Redundant) | **6** copies | 2 regions (primary + secondary paired) | Async (cross-region) | ❌ |
+| **RA-GRS** (Read-Access Geo) | **6** copies | 2 regions | Async (cross-region) | ✅ **Read-only** secondary |
+| **GZRS** (Geo-Zone Redundant) | **6** copies | 3 zones in primary + 1 secondary region | Sync (within zones), Async (cross-region) | ❌ |
+| **RA-GZRS** (Read-Access Geo-Zone) | **6** copies | 3 zones + 1 secondary | Sync + Async | ✅ **Read-only** secondary |
 
-> 💡 **Upgrading from GPv1 to GPv2**:
-> - Can be upgraded in-place via the portal, CLI, or PowerShell without downtime.
-> - **Cannot be downgraded**: The upgrade is **permanent and irreversible**.
+### Key Redundancy Rules
+- **LRS**: 3 copies within a single datacenter — cheapest but no zone/region protection
+- **ZRS**: Replicates **synchronously** across 3 availability zones — survives single datacenter failure
+- **GRS**: Provides region-level protection — secondary region is **NOT readable** unless failover
+- **RA-GRS**: Like GRS but with **read-only access to secondary endpoint** — use when you need read availability even if primary region fails
+- **Live migration to ZRS**: Supported only for **Standard GPv2** accounts currently using **LRS**. If using GRS/RA-GRS, must first change to LRS, then request live migration.
 
----
-
-## 🔄 Replication & Redundancy Mechanics
-
-| Replication | Copies | Zone Resilient? | Region Resilient? | Durability | Read Secondary? |
-|-------------|--------|-----------------|-------------------|------------|-----------------|
-| **LRS** (Locally Redundant) | 3 | ❌ No (1 DC) | ❌ No | 11 9s (99.999999999%) | ❌ No |
-| **ZRS** (Zone Redundant) | 3 | ✅ Yes (3 AZs) | ❌ No | 12 9s (99.9999999999%) | ❌ No |
-| **GRS** (Geo Redundant) | 6 | ❌ No (LRS in primary + LRS in secondary) | ✅ Yes | 16 9s | ❌ No |
-| **GZRS** (Geo-Zone Redundant) | 6 | ✅ Yes (ZRS in primary + LRS in secondary) | ✅ Yes | 16 9s | ❌ No |
-| **RA-GRS** | 6 | ❌ No | ✅ Yes | 16 9s | ✅ **Yes** (`-secondary` URL) |
-| **RA-GZRS** | 6 | ✅ Yes (3 AZs) | ✅ Yes | 16 9s | ✅ **Yes** (`-secondary` URL) |
+> ⚠️ **Exam Gotcha (Q12 from Mixed)**: If data must be stored on nodes in separate geographic locations AND be readable from the secondary location → Answer is **RA-GRS** (Read-Access Geo-Redundant Storage).
 
 ---
 
-## ⚠️ Customer-Initiated Account Failover
+## 📤 Data Transfer Tools
 
-- Supported on **GRS**, **RA-GRS**, **GZRS**, and **RA-GZRS** accounts
-- Used when the primary region experiences a catastrophic disaster or extended outage
-- **Failover Behavior**:
-  1. Primary endpoint DNS records are updated to point to the secondary region.
-  2. The secondary region becomes the **new primary**.
-  3. The storage account redundancy is automatically **converted to Locally Redundant Storage (LRS)**!
-  4. Any writes not yet replicated to the secondary region prior to failover are **permanently lost** (check **Last Sync Time** to evaluate RPO).
-  5. After failover completes, you must manually re-configure the account to GRS or GZRS to resume geo-replication.
+### AzCopy
+- Command-line utility for copying data **to/from** storage accounts
+- Supports **Blob storage** and **Azure Files** only (NOT Table or Queue)
+- Authentication:
+  - **Blob storage**: Azure AD or SAS token
+  - **File storage**: SAS token only (Azure AD not supported)
 
 ```bash
-# Azure CLI: Initiate customer failover
-az storage account failover --name "mystorageacct" --resource-group "RG1"
+# Copy a local folder to blob storage (recursive)
+azcopy copy "D:\folder1" "https://contosodata.blob.core.windows.net/public" --recursive
+
+# Sync a local folder with blob storage
+azcopy sync "D:\folder1" "https://contosodata.blob.core.windows.net/public"
 ```
+
+> 💡 **azcopy copy vs azcopy sync**: `copy` always uploads all files. `sync` skips files if the destination has a more recent last-modified time.
+
+### Azure Storage Explorer
+- Free GUI tool (Windows, macOS, Linux)
+- Upload/download/manage blobs, files, queues, and tables
+- Good for copying files over the internet (e.g., blueprint files to Blob storage)
+
+### Azure Import/Export Service
+- Physical disk shipping service for **massive** data transfers (terabytes)
+- **Import destinations**: Azure Blob Storage and Azure Files
+- **Export sources**: Azure Blob Storage only (cannot export Azure Files, Table, or Queue)
+- Import steps:
+  1. Attach external disk to server and run **WAImportExport.exe** (encrypts with BitLocker)
+  2. Create import job in Azure portal
+  3. Ship disks to Azure datacenter
+  4. Update tracking in portal
+- Requires **dataset CSV** and **driveset CSV** files before preparing drives
 
 ---
 
-## 🔒 Account Configuration & Security Baselines
+## 🔧 Upgrading & Changing Storage Accounts
 
-| Setting | Default / Recommended | Exam Consideration |
-|---------|-----------------------|--------------------|
-| **Minimum TLS Version** | **TLS 1.2** | Blocks legacy TLS 1.0/1.1 client connections |
-| **Secure Transfer Required** | Enabled (`httpsOnly = true`) | Enforces HTTPS on all REST API calls |
-| **Allow Blob Public Access** | Disabled by default | Can prevent anonymous public read access tenant-wide |
-| **Allowed Copy Scope** | Same Azure AD tenant / Same VNet | Prevents copying data outside corporate perimeter |
-| **Default Network Access** | Enabled from all networks | Can restrict to "Selected networks" (VNets & IP ranges) |
+- **GPv1 → GPv2 upgrade**: Supported and recommended. Must upgrade FIRST before changing to ZRS or enabling access tiers
+- **Changing replication**: Can be done in the portal (Replication setting)
+- **Live migration to ZRS prerequisites**:
+  - Account must be **Standard GPv2**
+  - Account must currently use **LRS** (not GRS/RA-GRS)
+  - Premium accounts must be migrated manually
 
 ---
 
@@ -86,27 +94,40 @@ az storage account failover --name "mystorageacct" --resource-group "RG1"
 
 | Fact | Value / Rule |
 |------|--------------|
-| Storage account name rules | 3–24 characters, numbers and lowercase letters only |
-| Redundancy after customer failover | Automatically converted to **LRS** |
-| Data loss during failover | Any data not replicated before primary failure is lost |
-| Secondary read access endpoint | `<accountname>-secondary.blob.core.windows.net` |
-| Upgrading GPv1 to GPv2 | In-place, zero downtime, **cannot be reversed** |
-| Minimum durability of LRS | 11 nines (99.999999999%) |
-| Minimum durability of GRS/GZRS | 16 nines (99.99999999999999%) |
-| Premium file shares protocol | Supports both SMB and NFS |
+| Recommended account type | **General Purpose v2 (GPv2)** |
+| LRS replica count | **3 copies** in a single datacenter |
+| ZRS replication | **Synchronous** across 3 availability zones |
+| RA-GRS unique feature | **Read-only access** to secondary region |
+| AzCopy supported services | **Blob and File** only (not Table/Queue) |
+| AzCopy auth for File storage | **SAS token only** (no Azure AD) |
+| Import/Export supported export | **Azure Blob storage only** |
+| Import/Export required files | **dataset CSV** and **driveset CSV** |
+| BlockBlobStorage prerequisite | Must use **Premium** performance tier |
+| Live migration to ZRS | Only from **LRS** on **Standard GPv2** accounts |
+| Reducing storage costs (infrequent access) | Change **Access tier** from Hot to Cool |
+| SMB port for Azure Files | **TCP port 445** |
 
 ---
 
-## 🚨 Common Exam Scenarios (Real Exam MCQs)
+## 🚨 Common Exam Scenarios (from AZ-104 MCQs)
 
-**Q: You need to design an Azure Storage account that provides 99.99% read availability for blob data even during a total datacenter and regional outage, while minimizing costs.**
-→ Deploy a General-purpose v2 storage account with **Read-Access Geo-Redundant Storage (RA-GRS)**.
+**Q: You need storage redundancy that replicates synchronously and survives a single datacenter failure in the region. What should you configure?**
+→ Use **Zone-Redundant Storage (ZRS)** with a **StorageV2 (GPv2)** account.
 
-**Q: A customer triggers an account failover for a storage account configured with GRS after a primary region failure. After the failover completes, what is the new replication type of the storage account?**
-→ The account is converted to **Locally Redundant Storage (LRS)**. To re-establish geo-replication, the administrator must explicitly change the replication setting back to GRS.
+**Q: Data must be stored on separate geographic nodes and be readable from the secondary location. Which redundancy option?**
+→ **Read-Access Geo-Redundant Storage (RA-GRS)**.
 
-**Q: You have an application that reads blobs from the secondary endpoint `storage1-secondary.blob.core.windows.net`. Can the application write new blobs directly to this endpoint?**
-→ **No**. The secondary endpoint is strictly **read-only**. Write requests are rejected until an account failover is completed.
+**Q: You want to set Account kind to BlockBlobStorage but settings show Standard performance. What must you change first?**
+→ Change **Performance** to **Premium** first, then you can select BlockBlobStorage.
 
-**Q: You need to migrate an existing GPv1 storage account to GPv2 to take advantage of lifecycle management policies and blob tiering without moving data.**
-→ In the Azure portal, navigate to the storage account **Configuration** blade and click **Upgrade to General-purpose v2**.
+**Q: Which storage accounts support lifecycle management rules (hot/cool/archive tiering)?**
+→ **GPv2**, **BlobStorage**, and **BlockBlobStorage** accounts support lifecycle management. GPv1 does NOT.
+
+**Q: You have a GPv1 account with LRS. You need zone-level protection. What do you do first?**
+→ **Upgrade the account to General Purpose v2** first, then change replication to ZRS.
+
+**Q: You need to copy on-premises files to a public blob container. Which command?**
+→ `azcopy copy D:\folder1 https://contosodata.blob.core.windows.net/public --recursive`
+
+**Q: You need to map a drive to an Azure file share from home Windows 10 computers. Which port must be open?**
+→ **TCP port 445** (SMB protocol).

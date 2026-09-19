@@ -1,168 +1,130 @@
-# Role-Based Access Control (RBAC)
+# RBAC (Role-Based Access Control)
 
 > 🎯 Exam Weight: Part of 15–20% Identity & Governance domain
 
 ---
 
-## 🔑 What is RBAC?
+## 🔑 What is Azure RBAC?
 
-- **Authorization system** built on Azure Resource Manager (ARM)
-- Controls **who** (identity) can do **what** (role) on **which resources** (scope)
-- Uses **role assignments** and **deny assignments** (Azure Blueprints / managed apps)
-
-> ⚠️ **Key Principle**: RBAC uses an **allow model** — access is denied unless explicitly allowed.
->
-> 💡 **NotActions is NOT Deny**: `NotActions` simply subtracts permissions from `Actions` within the same role definition. If another role assignment grants the permission excluded in `NotActions`, the user **will still have access**! Only explicit Azure **Deny assignments** override role assignments.
+- Azure's **authorization system** built on Azure Resource Manager
+- Controls **who** can do **what** on **which** Azure resources
+- Grants access by assigning **roles** to **security principals** at a particular **scope**
 
 ---
 
-## 🏗️ RBAC Components
+## 🧩 RBAC Components
 
-### Role Assignment = Security Principal + Role Definition + Scope
+### Security Principals (Who)
+| Principal | Description |
+|-----------|-------------|
+| **User** | An individual Azure AD account |
+| **Group** | A set of users; role applies to all members |
+| **Service Principal** | An identity for applications/services |
+| **Managed Identity** | System-assigned or user-assigned identity for Azure services |
 
+### Role Definitions (What)
+A collection of permissions (Actions, NotActions, DataActions, NotDataActions).
+
+### Scope (Where)
 ```
-[WHO]               [WHAT]              [WHERE]
-Security Principal  +  Role Definition  +  Scope
-(User/Group/SP/MI)     (set of perms)      (resource boundary)
+Management Group
+    └── Subscription
+           └── Resource Group
+                  └── Resource
 ```
+> 💡 **Inheritance**: Roles assigned at a parent scope are inherited by child scopes. A role assigned at a Subscription applies to ALL resource groups and resources within it.
 
 ---
 
-## 👤 Security Principals & Directory vs Azure Roles
+## 🛡️ Key Built-In Roles (Exam Favorites!)
 
-| Directory Role (Entra ID) | Scope | What it Manages |
-|---------------------------|-------|-----------------|
-| **Global Administrator** | Tenant-wide | All directory settings, users, licenses |
-| **User Administrator** | Tenant-wide | Users, groups, SSPR (cannot reset Global Admins) |
-| **Billing Administrator** | Tenant-wide | Purchases, subscriptions, billing tickets |
+| Role | Permissions | Key Limitation |
+|------|-------------|----------------|
+| **Owner** | Full access to all resources + can assign roles to others | - |
+| **Contributor** | Full access to all resources | **Cannot assign roles** (no `Microsoft.Authorization/*` permissions) |
+| **Reader** | View all resources | Cannot modify anything |
+| **User Access Administrator** | Manage user access to Azure resources | Can assign roles but cannot manage resources themselves |
 
-| Azure Resource Role (RBAC) | Scope | What it Manages |
-|----------------------------|-------|-----------------|
-| **Owner** | ARM Scope | Full access to resources + can grant access to others |
-| **Contributor** | ARM Scope | Full access to resources, **cannot** grant access |
-| **Reader** | ARM Scope | View-only access |
-| **User Access Administrator** | ARM Scope | Manage user access to resources (cannot modify resources) |
+### Common Service-Specific Roles
 
-> ⚠️ **Exam Gotcha**:
-> - Directory roles manage **Azure AD objects** (users, groups, domains).
-> - Azure RBAC roles manage **Azure resources** (VMs, VNets, Storage).
-> - Global Admin does not have access to Azure resources until **Access management for Azure resources** is elevated in Entra ID properties.
+| Role | What It Can Do |
+|------|----------------|
+| **Virtual Machine Contributor** | Manage VMs but not access to them, and not the VNet or storage they connect to |
+| **Network Contributor** | Manage networks (VNets, subnets, NSGs, load balancers) but not access them |
+| **Storage Blob Data Reader** | Read blob data (data plane access) |
+| **Storage Blob Data Contributor** | Read, write, delete blob data |
+| **Logic App Contributor** | Manage logic apps (create, edit, update) but not access to them |
+| **Logic App Operator** | Read, enable, disable logic apps but **cannot create or edit** |
+| **DevTest Labs User** | Connect, start, restart, shutdown VMs in DevTest Labs only |
+| **Security Admin** | View/edit security policies, view security states, alerts and recommendations in Security Center |
+| **Billing Reader** | Read-only access to billing information |
 
----
-
-## 📋 Specialized Built-in Roles Tested on Exam
-
-| Role | Permissions & Exam Details |
-|------|----------------------------|
-| **Virtual Machine Contributor** | Can manage VMs (start, restart, resize), but **cannot** create VNets or manage storage accounts directly |
-| **Network Contributor** | Can manage VNets, subnets, NSGs, and IP configurations |
-| **Storage Account Contributor** | Manages storage accounts, keys, and networking, but does not provide blob data plane access by default |
-| **Storage Blob Data Contributor** | Full read/write access to **blob data containers** (data plane) |
-| **Security Admin** | Views and edits security policies in Defender for Cloud |
-| **Support Request Contributor** | Creates and manages Azure support tickets |
-
-> 💡 **Deploying VMs with Custom/Limited Roles**: To deploy a VM, a user must have write permissions on the VM (`Microsoft.Compute/virtualMachines/*`) **AND** `Microsoft.Network/virtualNetworks/subnets/join/action` on the target subnet!
+> ⚠️ **Exam Gotcha**: `Contributor` role can manage all resources (create, modify, delete) but **cannot** assign RBAC roles to other users. Only `Owner` or `User Access Administrator` can delegate access.
 
 ---
 
-## 🌍 Scope Levels & Inheritance
+## 🔄 Role Assignment Process
 
-```
-Management Group (Root: Tenant Root Group)
-    └── Management Group (Child)
-            └── Subscription
-                    └── Resource Group
-                            └── Individual Resource
-```
+1. **Identify the security principal** (user, group, service principal, managed identity)
+2. **Select the role definition** (built-in or custom)
+3. **Determine the scope** (management group, subscription, resource group, or resource)
+4. **Create the role assignment** via Portal, CLI, PowerShell, or ARM template
 
-- Roles assigned at a **higher scope** are **automatically inherited** by all child scopes
-- Inherited permissions **cannot** be removed at a lower scope; they can only be overridden by a Deny assignment
-- **Resource Moves**: When moving a resource between subscriptions, previous **role assignments do not move** with the resource. You must recreate them in the destination scope.
-
----
-
-## 🛠️ Managing Role Assignments
-
-### Azure CLI
 ```bash
-# List role assignments for a user
-az role assignment list --assignee user1@contoso.com --all
-
-# Assign Contributor role at Resource Group scope
+# Azure CLI: Assign Contributor role to a user at resource group scope
 az role assignment create \
-  --assignee user1@contoso.com \
+  --assignee "user@contoso.com" \
   --role "Contributor" \
-  --resource-group RG1
+  --resource-group "RG1"
 
-# Assign role at Subscription scope
-az role assignment create \
-  --assignee "IT-Engineers" \
-  --role "Reader" \
-  --scope "/subscriptions/00000000-0000-0000-0000-000000000000"
-```
-
-### PowerShell
-```powershell
-# List role assignments
-Get-AzRoleAssignment -SignInName user1@contoso.com
-
-# Assign role
-New-AzRoleAssignment -SignInName user1@contoso.com `
-  -RoleDefinitionName "Contributor" `
-  -ResourceGroupName "RG1"
-
-# Remove role assignment
-Remove-AzRoleAssignment -SignInName user1@contoso.com `
-  -RoleDefinitionName "Contributor" `
-  -ResourceGroupName "RG1"
+# PowerShell: Assign Reader role at subscription scope
+New-AzRoleAssignment `
+  -SignInName "user@contoso.com" `
+  -RoleDefinitionName "Reader" `
+  -Scope "/subscriptions/{sub-id}"
 ```
 
 ---
 
-## 🔧 Custom Roles
+## 🛠️ Custom RBAC Roles
 
-- Created when built-in roles do not fit least-privilege needs
-- Can be defined using JSON or PowerShell / Azure CLI
-- Available in **all Azure AD tiers** (no Premium license required)
+When built-in roles don't meet your needs, you can create **custom roles**:
 
-### Custom Role JSON Structure
 ```json
 {
-  "Name": "Custom VM Operator",
-  "IsCustom": true,
-  "Description": "Can monitor, restart, and deallocate VMs without modifying network or storage",
+  "Name": "Custom Resource Operator",
+  "Description": "Can view, create, modify, and delete resources but cannot manage access",
   "Actions": [
-    "Microsoft.Compute/*/read",
-    "Microsoft.Compute/virtualMachines/start/action",
-    "Microsoft.Compute/virtualMachines/restart/action",
-    "Microsoft.Compute/virtualMachines/deallocate/action"
+    "Microsoft.Resources/subscriptions/resourceGroups/read",
+    "Microsoft.Resources/subscriptions/resourceGroups/resources/*"
   ],
   "NotActions": [
-    "Microsoft.Compute/virtualMachines/delete"
+    "Microsoft.Authorization/*/Write",
+    "Microsoft.Authorization/*/Delete"
   ],
-  "DataActions": [],
-  "NotDataActions": [],
   "AssignableScopes": [
-    "/subscriptions/11111111-1111-1111-1111-111111111111",
-    "/providers/Microsoft.Management/managementGroups/EngineeringMG"
+    "/subscriptions/c276fc76-9cd4-44c9-99a7-4fd71546436e"
   ]
 }
 ```
 
-> ⚠️ **Custom Role Rules**:
-> 1. `AssignableScopes` can contain Management Groups, Subscriptions, or Resource Groups.
-> 2. You **cannot** set wildcards `*` in `AssignableScopes`.
-> 3. Limit: Up to **5,000 custom roles** per directory.
+### AssignableScopes
+- Defines **where** the custom role can be assigned
+- Can be set to a subscription (`/subscriptions/{id}`), resource group, or management group
+- Does **NOT** grant access — just limits where the role appears for assignment
+
+> ⚠️ **Exam Gotcha**: `AssignableScopes` restricts where the role CAN be assigned, not where it HAS effect. The scope specified in the role assignment determines the effective scope.
 
 ---
 
-## 🔒 Privileged Identity Management (PIM)
+## 🔐 Owner Role & Elevating Global Admin Access
 
-- Requires **Azure AD Premium P2**
-- Provides **Just-in-Time (JIT)** privileged access
-- Users are assigned as **Eligible** (not permanently active)
-- Requires multi-factor authentication (MFA), justification, and optional approver approval to activate
-- Automatically logs and audits role activation history
+- A **Global Administrator** in Azure AD does **NOT** automatically have access to Azure subscription resources
+- To gain access, the Global Admin must:
+  1. Navigate to **Microsoft Entra ID > Properties**
+  2. Set **Access management for Azure resources** to **Yes**
+  3. This grants them the **User Access Administrator** role at the root management group (`/`) scope
+- Only the **Owner** of a subscription can assign the Owner role to other users
 
 ---
 
@@ -170,31 +132,34 @@ Remove-AzRoleAssignment -SignInName user1@contoso.com `
 
 | Fact | Value / Rule |
 |------|--------------|
-| Owner vs Contributor | Contributor has full resource rights but **cannot grant access** or delegate roles |
-| User Access Administrator | Manages role assignments; cannot manage resource configs directly |
-| Maximum role assignments per subscription | **2,000** |
-| Maximum custom roles per tenant | **5,000** |
-| Custom role licensing | Free (available in all Azure tiers) |
-| Moving resources across subscriptions | Existing role assignments are **not** preserved or moved |
-| NotActions behavior | Subtraction from Actions; does NOT override a grant from another role assignment |
-| Subnet join requirement | VM deployment requires `Microsoft.Network/virtualNetworks/subnets/join/action` |
-| Marketplace programmatic deployment | Requires accepting legal terms (`Set-AzMarketplaceTerms`) before deployment |
+| Who can assign roles to other users | **Owner** or **User Access Administrator** |
+| Contributor vs Owner difference | Contributor **cannot** assign roles |
+| RBAC scope inheritance | Parent scope roles inherited by all children |
+| Custom role AssignableScopes | Limits where the role **appears** for assignment |
+| Role needed to delegate access | **User Access Administrator** (for access delegation only) |
+| Role for managing VMs (least privilege) | **Virtual Machine Contributor** |
+| Role for managing networks (least privilege) | **Network Contributor** |
+| Service Admin change location | **Subscription > Properties > Service Admin** |
+| Enable Traffic Analytics role requirement | Owner, Contributor, Reader, or Network Contributor at subscription scope |
 
 ---
 
-## 🚨 Common Exam Scenarios (Real Exam MCQs)
+## 🚨 Common Exam Scenarios (from AZ-104 MCQs)
 
-**Q: You need to allow a user to deploy Azure Virtual Machines into an existing subnet in VNet1, following least privilege.**
-→ Assign **Virtual Machine Contributor** on the target resource group, AND assign a custom role with `Microsoft.Network/virtualNetworks/subnets/join/action` (or **Network Contributor**) on `VNet1` / the subnet.
+**Q: You need to ensure that User1 can assign the Reader role for VNet1 to other users. What role should you assign to User1?**
+→ Assign the **User Access Administrator** role for VNet1 to User1. The Contributor role does NOT include role assignment permissions.
 
-**Q: A custom role has `Microsoft.Compute/virtualMachines/*` in Actions and `Microsoft.Compute/virtualMachines/delete` in NotActions. A user is assigned this custom role AND the built-in Contributor role on the same resource group. Can the user delete virtual machines?**
-→ **Yes**. `NotActions` is not an explicit deny. The user's Contributor role explicitly grants delete permissions.
+**Q: You need to provide the Developers group with the ability to create Azure logic apps in the Dev resource group. Solution: Assign the DevTest Labs User role. Does this meet the goal?**
+→ **No**. DevTest Labs User only manages VMs in DevTest Labs. You need the **Logic App Contributor** role or the **Contributor** role on the resource group.
 
-**Q: An administrator attempts to deploy a third-party Marketplace template in a new subscription and receives a legal terms failure.**
-→ The user must accept the programmatic deployment terms for the Marketplace image using the Azure portal or PowerShell `Set-AzMarketplaceTerms`.
+**Q: An administrator named Admin1 needs to manage internal and public load balancers. Which role should you assign following least privilege?**
+→ Assign the **Network Contributor** role. It manages networks including load balancers, but does not grant access to them.
 
-**Q: You need to create a custom RBAC role that can be assigned across three distinct subscriptions within the "Sales" management group.**
-→ Set the `AssignableScopes` in the custom role definition to the management group URI: `"/providers/Microsoft.Management/managementGroups/Sales"`.
+**Q: You need to create a custom RBAC role that can only be assigned to resource groups in a specific subscription, allows viewing/creating/modifying/deleting resources, but prevents managing access permissions.**
+→ Set `AssignableScopes` to the subscription ID. Set `Actions` to `"*"` and `NotActions` to `"Microsoft.Authorization/*/Write"` and `"Microsoft.Authorization/*/Delete"`.
 
-**Q: Which role is required to manage and assign Azure Resource Locks without granting full resource ownership?**
-→ **User Access Administrator** (or any role with `Microsoft.Authorization/*` permissions at that scope).
+**Q: User1 needs to deploy VMs and manage virtual networks. Which RBAC role uses least privilege?**
+→ **Virtual Machine Contributor** — it manages VMs but not access, VNet, or storage.
+
+**Q: Only the subscription Owner (Admin3) can assign ownership. A Global Admin (Admin1) who elevated access cannot assign Owner to other users on the subscription unless Admin3 does it.**
+→ Only the **Owner** of the subscription can assign the Owner role to others.

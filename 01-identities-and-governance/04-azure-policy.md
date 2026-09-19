@@ -6,74 +6,80 @@
 
 ## 🔑 What is Azure Policy?
 
-- Service for **enforcing organizational standards** and assessing compliance at scale
-- Evaluates resources against defined rules during deployment (ARM request) and continuously on existing resources
-- **RBAC vs Azure Policy**:
-  - **RBAC**: Controls *who* has permissions to do actions (Identity & Authorization)
-  - **Azure Policy**: Controls *what* resource properties and configurations are allowed (Governance & Compliance) regardless of the user's role (even an Owner must comply with Policy!)
+- A service that creates, assigns, and manages **policies** that enforce rules and effects over Azure resources
+- Ensures resources stay **compliant** with corporate standards and service level agreements
+- Works at any scope: Management Group, Subscription, or Resource Group
 
 ---
 
-## 🏗️ Policy Components
+## 📦 Policy Definitions, Assignments & Initiatives
 
-### 1. Policy Definition
-- Defines **conditions** (if) and an **effect** (then)
-- Written in JSON
+### Policy Definition
+A JSON rule that describes what to evaluate and what action to take:
+```json
+{
+  "if": {
+    "field": "type",
+    "equals": "Microsoft.Sql/servers"
+  },
+  "then": {
+    "effect": "deny"
+  }
+}
+```
 
-### 2. Policy Initiative (Policy Set)
-- A **collection of related policy definitions** grouped to achieve a broader compliance goal
-- Example: "Regulatory Compliance: ISO 27001" or "Enforce Tagging and Monitoring"
-- Simplifies governance by assigning and tracking one initiative rather than dozens of individual policies
+### Policy Assignment
+- A policy definition **applied** to a specific scope (management group, subscription, or resource group)
+- Policies assigned at a parent scope are **inherited** by child scopes
+- You can set **exclusions** to exempt specific child resources or resource groups
 
-### 3. Policy Assignment
-- Applying a definition or initiative to a specific scope: **Management Group, Subscription, or Resource Group**
-- Child scopes inherit assignments automatically
-
-### 4. Exclusions & Exemptions
-- **Exclusion**: Specified directly in the assignment to completely bypass certain child resource groups or resources
-- **Exemption**: Explicitly exempts a scope or resource from an existing assignment with a formal justification (`Waiver` or `Mitigated`) and optional expiration date
+### Policy Initiative (Initiative Definition)
+- A **collection of policy definitions** grouped together for a single assignment
+- Example: "Enable Monitoring in Azure Security Center" initiative contains multiple individual policies
+- Simplifies policy management when you need to apply multiple related policies
 
 ---
 
-## ⚡ Policy Evaluation Order & Effects
+## ⚡ Policy Effects
 
-```
-Disabled ➔ Append / Modify ➔ Deny ➔ Audit ➔ AuditIfNotExists / DeployIfNotExists
-```
+| Effect | Behavior |
+|--------|----------|
+| **Deny** | Blocks the resource creation or modification |
+| **Audit** | Logs a warning in the Activity Log but allows the action |
+| **AuditIfNotExists** | Audits if a related resource does NOT exist |
+| **DeployIfNotExists** | Deploys a related resource if it doesn't exist (requires managed identity) |
+| **Append** | Adds fields to a resource during creation or update (e.g., append a tag) |
+| **Modify** | Adds, updates, or removes tags on a resource during creation or update |
+| **Disabled** | Policy is not enforced |
 
-| Effect | Action on Request | Action on Existing Resources | Typical Use Case |
-|--------|-------------------|-----------------------------|------------------|
-| **Disabled** | None (turned off) | Not evaluated | Testing / debugging |
-| **Modify** | Adds, replaces, or removes tags before ARM processes | Can be remediated | Enforce department tag on resources |
-| **Append** | Adds required fields/properties to the resource creation request | Cannot remediate | Append default parameters or IP rules |
-| **Deny** | **Blocks** the creation or update of non-compliant resource | **Marked as Non-Compliant** (NOT deleted/stopped!) | Block unapproved VM sizes or locations |
-| **Audit** | **Allows** creation/update but logs a warning in activity logs | Marked as Non-Compliant | Assess compliance without breaking apps |
-| **AuditIfNotExists** | Evaluates related/child resources; logs warning if missing | Marked as Non-Compliant | Audit if VM has diagnostic extension |
-| **DeployIfNotExists** | Creates the missing related resource via managed identity | Requires **Remediation Task** | Auto-deploy Log Analytics agent on new VMs |
-
-> ⚠️ **CRITICAL Exam Gotcha**: When you assign a policy with a **Deny** effect to an existing subscription:
-> 1. Existing non-compliant resources **continue running** and are **NOT deleted or stopped**.
-> 2. Existing resources appear as **Non-Compliant** in the Azure Policy dashboard.
-> 3. Any attempt to update the existing non-compliant resource or deploy a new non-compliant resource is **blocked**.
+> ⚠️ **Exam Gotcha**: Azure Policy with a **Deny** effect at a parent scope **cannot be overridden** by an Allow at a child scope. Deny always wins!
 
 ---
 
-## 🔄 Remediation Tasks
+## 🏷️ Tag Policies (Frequently Tested!)
 
-- Applied to resources with **DeployIfNotExists** or **Modify** effects
-- To remediate existing resources, you must create a **Remediation Task**
-- **Managed Identity Requirement**: The policy assignment creates a System-Assigned (or User-Assigned) Managed Identity. This identity must be granted appropriate RBAC permissions (e.g., Contributor) at the assignment scope to create or modify child resources.
+### Tags Do NOT Inherit
+- Tags applied to a **resource group** or **subscription** are **NOT automatically inherited** by the resources within them
+- To enforce tag inheritance, you must use Azure Policy with the **"Inherit a tag from the resource group"** built-in policy
 
-```bash
-# Azure CLI: Trigger a compliance evaluation scan
-az policy state trigger-scan --resource-group "RG1"
+### Common Tag Policy Scenarios
+| Policy | Effect | What It Does |
+|--------|--------|-------------|
+| **Require a tag on resources** | Deny | Blocks creation of any resource without the specified tag |
+| **Require a tag on resource groups** | Deny | Blocks creation of resource groups without the tag |
+| **Inherit a tag from the resource group** | Modify | Automatically copies a tag from the RG to new resources created within it |
+| **Append a tag and its value** | Append | Adds a specific tag to all new resources at the assigned scope |
 
-# Azure CLI: Create a remediation task
-az policy remediation create \
-  --name "RemediateMissingTags" \
-  --policy-assignment "/subscriptions/{sub-id}/providers/Microsoft.Authorization/policyAssignments/{assignment-id}" \
-  --resource-group "RG1"
-```
+> 💡 **Key Exam Fact**: When you assign a tag policy with the **Append** or **Modify** effect to a resource group, new resources deployed to that RG will automatically get the tag. However, **existing resources** in the RG are NOT retroactively tagged — only new resources get the tag unless you run a remediation task.
+
+---
+
+## 🔄 Policy Compliance & Remediation
+
+- **Compliance dashboard** shows which resources comply with assigned policies
+- **Non-compliant resources** can be remediated:
+  - For `DeployIfNotExists` and `Modify` policies: Create a **remediation task** that applies the policy to existing non-compliant resources
+  - Remediation tasks require a **managed identity** to modify resources
 
 ---
 
@@ -81,26 +87,25 @@ az policy remediation create \
 
 | Fact | Value / Rule |
 |------|--------------|
-| Policy vs RBAC | Policy enforces resource configurations; RBAC grants user permissions |
-| Deny effect on existing resources | Flags them as Non-Compliant; does NOT delete or power off resources |
-| Policy evaluation order | Disabled ➔ Append/Modify ➔ Deny ➔ Audit ➔ AuditIfNotExists/DeployIfNotExists |
-| Remediation requirement | Requires Managed Identity with RBAC write permissions on target scope |
-| Initiative vs Definition | Initiative is a bundle/grouping of multiple policy definitions |
-| Scope exclusion | Can exclude specific Resource Groups or Resources within the assigned scope |
-| Triggering manual scan | `az policy state trigger-scan` or `Start-AzPolicyComplianceScan` |
+| Tags inherit from resource group? | **No** — tags do NOT inherit by default |
+| Force tag inheritance | Use Azure Policy with **Modify** or **Append** effect |
+| Deny at parent scope | **Cannot be overridden** by child scope policies |
+| Policy exclusions | Can exclude specific child scopes from policy assignment |
+| Marketplace legal terms error | Run `Set-AzMarketplaceTerms` cmdlet to accept terms programmatically |
+| Policy initiative | Group of policies assigned together as a single unit |
 
 ---
 
-## 🚨 Common Exam Scenarios (Real Exam MCQs)
+## 🚨 Common Exam Scenarios (from AZ-104 MCQs)
 
-**Q: You assign a policy definition that denies the creation of Azure SQL Database servers in the West US region. There are already 5 SQL servers running in West US in that subscription. What happens to the existing servers?**
-→ The existing servers **continue to function without interruption**. They are reported as **Non-Compliant** in the Azure Policy dashboard. New deployments of SQL servers in West US are blocked.
+**Q: You assign a policy to RG6 that appends a tag "Label:Value1" to new resources. You also manually tag RG6 with "RGroup:RG6". When you deploy VNET2 to RG6, what tags does VNET2 have?**
+→ VNET2 gets **only "Label:Value1"** (from the append policy). It does **NOT** get "RGroup:RG6" because tags on resource groups are **not inherited** by resources.
 
-**Q: You need to ensure that every newly deployed Virtual Machine automatically has the Log Analytics agent installed, and existing VMs are updated as well.**
-→ Assign a built-in policy with the **DeployIfNotExists** effect targeting VMs, and create a **Remediation Task** to deploy the agent on all existing non-compliant VMs.
+**Q: An Azure Policy at the subscription scope denies creation of Azure SQL Servers, but an exclusion is set for ContosoRG1. Where can you create SQL servers?**
+→ You can create Azure SQL Servers **only in ContosoRG1** (the excluded resource group). The deny policy blocks creation everywhere else in the subscription.
 
-**Q: An organization wants to enforce 15 different security and compliance policies across all production subscriptions under a single management group.**
-→ Create a **Policy Initiative (Policy Set)** containing the 15 definitions, and assign the initiative at the **Management Group scope**.
+**Q: Admin1 deploys a Marketplace resource but gets "Legal terms have not been accepted" error. How do you fix it?**
+→ Run the **`Set-AzMarketplaceTerms`** cmdlet from Azure PowerShell to accept the Marketplace legal terms programmatically.
 
-**Q: You need to prevent developers from deploying expensive VM sizes in RG1, but allow three specific developers who are Subscription Owners to do so.**
-→ Azure Policy applies to **ALL users regardless of RBAC permissions** (even Subscription Owners). To allow specific developers, either assign the policy to a different resource group or configure a policy **Exemption** / **Exclusion** for their dedicated resource group.
+**Q: Azure Policy at the root management group denies virtual networks. Can you create a VNet in a child subscription that has an "allow" policy?**
+→ **No**. Deny at the root management group is inherited and **deny overrides allow**.

@@ -93,3 +93,31 @@ docker push myacr.azurecr.io/myimage:v1
 
 **Q: You are deploying an AKS cluster with Azure CNI networking. The cluster will have 10 nodes, with up to 30 pods per node. How many IP addresses must the subnet support?**
 → At least 310 IP addresses (+ Azure reserved IPs) because Azure CNI assigns a real subnet IP to every node and every pod.
+
+**Q: You need to deploy a YAML manifest file to an AKS cluster named AKS1. What command should you use?**
+→ Use the **`kubectl`** client (e.g., `kubectl apply -f myapp.yaml`). `az aks` manages the cluster itself. `azcopy` is for storage. To install kubectl: run `az aks install-cli` from Azure CLI.
+
+**Q: You need to install the kubectl client tool on a Windows 10 computer that has Azure CLI installed. What command should you run?**
+→ `az aks install-cli` — this downloads and installs the kubectl binary locally.
+
+---
+
+## 🔀 Moving a VM to a Different Virtual Network
+
+You **cannot** directly reassign a VM's VNet after creation. The procedure is:
+
+1. **Identify the OS disk** used by the VM
+2. **Delete the VM** (retain the disk — do NOT delete the disk)
+3. **Recreate the VM** in the target virtual network
+4. **Attach the original OS disk** to the new VM
+
+> 💡 **Exam Gotcha**: Moving a VM to a different VNet requires deleting and recreating it — you cannot just move or update the NIC's virtual network assignment while the VM exists.
+
+---
+
+## 🔌 NIC Region Constraint
+
+- A **network interface (NIC)** must be in the **same region (location)** as the virtual machine and the virtual network it connects to
+- If creating a new NIC for an existing VM: the NIC must be in the **same region as the VM**, regardless of which resource group it's in
+
+> 💡 **Exam Tip (Q5-Q7)**: A NIC in a different resource group is allowed, but it MUST be in the same region as the VM and VNet. A NIC in a different region (e.g., Central US vs West US) will FAIL.

@@ -84,3 +84,13 @@ To bind a custom domain (e.g. `www.contoso.com`) to an App Service:
 
 **Q: You need to configure a custom domain `shop.contoso.com` on an Azure Web App. Which two DNS records must you create in your public DNS zone?**
 → A **CNAME record** pointing `shop.contoso.com` to `appname.azurewebsites.net`, and a **TXT record** pointing `asuid.shop.contoso.com` to the Custom Domain Verification ID.
+
+**Q: You need to add a custom domain named `www.contoso.com` to webapp1. What should you do FIRST?**
+→ **Create a DNS record** (CNAME or A record) at your DNS registrar pointing the custom domain to the App Service. You cannot add the domain in the portal until the DNS record exists for verification.
+
+**Q: The option to create a staging slot is unavailable on your App Service plan. What should you do?**
+→ **Scale up** the App Service plan to **Standard, Premium, or Isolated tier**. Deployment slots require Standard tier or higher. Scale Out (more instances) does NOT unlock slots.
+
+**Q: You have App Service Plans: ASP1 (Windows, East US), ASP2 (Linux, West US), ASP3 (Linux, East US). Which plans can host an ASP.NET Core app? Which can host an ASP.NET (classic) app?**
+→ **ASP.NET Core**: ASP1 and ASP3 (Core supports both Windows AND Linux). NOT ASP2 (wrong region for the app).
+→ **ASP.NET (classic)**: ASP1 only (classic ASP.NET requires **Windows only**; Linux is not supported).

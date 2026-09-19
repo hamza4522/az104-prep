@@ -57,6 +57,31 @@ Supported Destinations:
 
 ---
 
+## 🔗 Network Performance Monitor (NPM)
+
+- Cloud-based **hybrid network monitoring** solution in Azure Monitor
+- Monitors network performance between points in your network infrastructure:
+  - Between **on-premises datacenter and Azure VMs**
+  - Between branch offices and multi-tier applications
+  - ExpressRoute performance monitoring
+- Used to **detect network issues before users complain**
+
+> 💡 **Exam Tip**: To monitor **latency between an on-premises network and Azure VMs**, use **Network Performance Monitor** (not "Connection Troubleshoot" which is for specific VM-to-endpoint testing).
+
+---
+
+## 📱 App Service Diagnostics Logging
+
+| Log Type | Enables | Use Case |
+|----------|---------|----------|
+| **Web server logging** | Raw HTTP request/response logs | Diagnose **HTTP 500**, 404, connectivity errors |
+| **Application logging** | App-generated trace messages | Debug application code errors |
+| **Detailed error messages** | Error page HTML for failed requests | View exact error for 400+ status codes |
+
+> 💡 **Exam Gotcha (Q9)**: To provide developers real-time details of HTTP 500 connection errors on a Web App → Enable **Web server logging** (not "Application Logging" which is for app code).
+
+---
+
 ## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
 **Q: A virtual machine was accidentally deleted last night. You need to identify which administrator initiated the deletion operation.**
@@ -64,3 +89,9 @@ Supported Destinations:
 
 **Q: An organization's compliance policy requires all subscription activity events to be retained for at least 365 days.**
 → Create a **Diagnostic Setting** for the Activity Log and configure an **Azure Storage Account** as the export destination with a retention of 365 days.
+
+**Q: You need to monitor the latency between your on-premises network and 10 Azure virtual machines.**
+→ Use **Network Performance Monitor** in Azure Monitor — it is designed for cloud-based hybrid network monitoring.
+
+**Q: Users report HTTP 500 errors on webapp1. You need to provide developers real-time access to connection error details.**
+→ From webapp1 settings, enable **Web server logging** (not Application Logging).

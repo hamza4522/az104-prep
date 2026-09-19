@@ -49,3 +49,22 @@
 
 **Q: You need to run an automation script that creates Active Directory user accounts on an on-premises domain controller whenever a new employee is hired.**
 → Deploy an Azure Automation **Hybrid Runbook Worker** on a server on the on-premises network, and target the runbook to run on the Hybrid Worker group.
+
+---
+
+## 🔗 IT Service Management Connector (ITSM)
+
+Connects Azure Monitor alerts to an on-premises **ITSM tool** (e.g., Microsoft System Center Service Manager, ServiceNow, Cherwell, Provance):
+
+| Feature | Details |
+|---------|---------|
+| **Full name** | IT Service Management Connector (ITSMC) |
+| **Supported ITSM tools** | Microsoft System Center Service Manager, ServiceNow, Cherwell, Provance |
+| **What it does** | Creates work items (incidents, change requests) in the ITSM tool based on Azure alerts |
+| **Alert types supported** | Metric alerts, Activity Log alerts, Log Analytics alerts |
+| **Requirement** | Must be deployed FIRST before creating ITSM-based notification actions in Action Groups |
+
+> 💡 **Exam Tip (Q15)**: To set an alert in Service Manager when Azure VM memory falls below 10% → **Deploy the IT Service Management Connector (ITSM)** first, then configure the alert rule and action group.
+
+**Q: You need to ensure that an alert is set in Microsoft System Center Service Manager when the available memory on VM1 is below 10%. What should you do first?**
+→ Deploy the **IT Service Management Connector (ITSMC)** to connect Azure Monitor with Service Manager. Then create the alert rule targeting the memory metric on VM1.

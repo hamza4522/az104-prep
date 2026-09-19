@@ -1,136 +1,188 @@
 # Azure Files & Azure File Sync
 
-> 🎯 Exam Weight: Part of 15–20% Storage domain
+> 🎯 Exam Weight: Part of 15–20% Storage domain — HIGH FREQUENCY FILE SYNC QUESTIONS!
 
 ---
 
-## 🔑 Azure Files Overview
+## 🗂️ Azure Files Overview
 
-- Fully managed **cloud file shares** accessible via industry-standard **SMB** (Server Message Block 3.0) and **NFS 4.1** protocols
-- Concurrently mountable by cloud VMs and on-premises Windows, Linux, and macOS clients
-- Replaces traditional on-premises file servers (NAS/SAN) without requiring VM management
+Azure Files provides **fully managed file shares** in the cloud accessible via the **SMB (Server Message Block)** protocol and **NFS** protocol.
 
-### Protocol & Port Requirements
-- **SMB 3.0**: Requires **Port 445 outbound**
-- **ISP Port 445 Blocking**: Many residential ISPs and public networks block port 445:
-  - **Workaround 1**: Establish a **VPN connection** (P2S or S2S) or **ExpressRoute** to Azure, then mount over private IP.
-  - **Workaround 2**: Deploy **Azure File Sync** on an on-premises server; local clients access the local server over LAN SMB, and the server syncs to Azure over HTTPS (Port 443).
+| Feature | Detail |
+|---------|--------|
+| Protocol | **SMB 3.0/3.1.1** (Windows/Linux/macOS) and **NFS 4.1** (Linux) |
+| Port | **TCP port 445** (SMB) — must be open outbound from client |
+| UNC Path format | `\\<storage-account-name>.file.core.windows.net\<share-name>` |
+| Max share size (standard) | **5 TB** per share |
+| Max share size (premium/large) | **100 TiB** with large file shares enabled |
+| Premium file shares account type | **FileStorage** (special-purpose storage account) |
 
----
-
-## 📦 Storage Tiers & Capacities
-
-| Tier | Drive Type | Billing Model | Minimum Size | Primary Use Case |
-|------|------------|---------------|--------------|------------------|
-| **Premium** | SSD | Provisioned | 100 GiB | High IOPS, latency-sensitive, databases |
-| **Transaction Optimized** | HDD | Pay-as-you-go | None | Heavy transaction workloads, standard shares |
-| **Hot** | HDD | Pay-as-you-go | None | General team file shares, regular access |
-| **Cool** | HDD | Pay-as-you-go | None | Archive, backup shares, infrequent access |
-
-> 💡 **Large File Shares**: Standard storage accounts support up to **100 TiB** per file share (requires the **Large file shares** feature to be enabled on the storage account; cannot be disabled once turned on).
+> ⚠️ **Exam Gotcha**: Premium Azure file shares require a **FileStorage** account type. Standard GPv2/GPv1 accounts cannot host premium file shares.
 
 ---
 
-## 🔌 Mounting Azure File Shares
+## 🔌 Connecting to Azure Files
 
-```cmd
-# Windows command prompt: Persistent drive mapping
-net use Z: \\mystorageacct.file.core.windows.net\myshare /u:AZURE\mystorageacct <StorageAccountKey> /persistent:yes
+### UNC Path Construction
+```
+\\<storage-account-name>.file.core.windows.net\<share-name>
 ```
 
+**Example**: Storage account = `contosostorage`, share = `data`:
+```
+\\contosostorage.file.core.windows.net\data
+```
+
+### Mounting on Windows
 ```powershell
-# PowerShell: Test port 445 and map drive
-$connectTest = Test-NetConnection -ComputerName mystorageacct.file.core.windows.net -Port 445
-if ($connectTest.TcpTestSucceeded) {
-    New-PSDrive -Name Z -PSProvider FileSystem -Root "\\mystorageacct.file.core.windows.net\myshare" -Persist
-} else {
-    Write-Error "Port 445 is blocked. Route traffic through VPN or deploy Azure File Sync."
-}
+# Map drive using net use (requires port 445 open)
+net use Z: \\contosostorage.file.core.windows.net\data /u:Azure\contosostorage <access-key>
 ```
+
+> ⚠️ **Exam Gotcha (Port 445 ISP Blocking)**: Many ISPs block outbound TCP port 445. Workaround options:
+> 1. **Azure File Sync** — files sync to a local server endpoint; no port 445 needed from user machines
+> 2. **VPN/ExpressRoute** — traffic goes through private channel, not blocked by ISP
 
 ---
 
-## 🔄 Azure File Sync Architecture & Step-by-Step Deployment
+## 🔄 Azure File Sync
 
-Azure File Sync centralizes file shares in Azure Files while retaining the flexibility, performance, and compatibility of an on-premises Windows file server.
+Azure File Sync transforms a Windows Server into a **quick cache** of your Azure file share. It enables multi-site sync, cloud tiering, and seamless branch office file access.
 
-```
-[Azure Files: Cloud Endpoint]
-            ▲
-            │ HTTPS (Port 443) Sync
-            ▼
-[Storage Sync Service] ── Sync Group
-            ▲
-            │ HTTPS (Port 443)
-            ▼
-[Registered Server 1 (Local Folder: D:\Data)] ── Server Endpoint (Cloud Tiering Enabled)
-```
+### Core Concepts
 
-### 🛠️ Mandatory Deployment Steps (Tested on Exam!)
-1. **Create a Storage Sync Service** in Azure within the desired region.
-2. **Prepare On-Premises Server**: Ensure Windows Server runs NTFS (ReFS and FAT are NOT supported for server endpoints).
-3. **Install the Azure File Sync Agent** on the Windows Server.
-4. **Register the Server** with the Storage Sync Service using Azure credentials.
-5. **Create a Sync Group** inside the Storage Sync Service.
-6. **Add a Cloud Endpoint**: Select the storage account and Azure file share (each sync group has **exactly one** Cloud Endpoint).
-7. **Add a Server Endpoint**: Select the registered server, specify the local path (e.g., `D:\DepartmentShare`), and configure Cloud Tiering.
+| Concept | Definition |
+|---------|-----------|
+| **Storage Sync Service** | Top-level Azure resource for File Sync (must be in same subscription) |
+| **Sync Group** | Defines the sync topology — one cloud endpoint + one or more server endpoints |
+| **Cloud Endpoint** | The Azure file share (exactly **one** per sync group) |
+| **Server Endpoint** | A path on a registered Windows Server (can have **multiple** per sync group) |
+| **Registered Server** | A Windows Server that has a trust relationship with the Storage Sync Service |
+
+> ⚠️ **Critical Exam Rule**: A sync group can have **ONLY ONE cloud endpoint**, but can have **MULTIPLE server endpoints**.
 
 ---
 
-## ☁️ Cloud Tiering Mechanics
+## 📋 Azure File Sync Deployment Steps (Exam Favorite!)
 
-Cloud Tiering splits files between local server storage and Azure Files:
-- **Frequently accessed files** remain cached locally on the Windows Server.
-- **Infrequently accessed files** are tiered to Azure Files; the local file is converted into a **pointer/stub (reparse point)** with the offline attribute `FILE_ATTRIBUTE_OFFLINE` (displayed with an `O` or an "X" in File Explorer).
-- When a user opens a tiered file, Azure File Sync seamlessly recalls the data from Azure in real-time.
+The **7-step deployment sequence** tested heavily on the exam:
 
-### Cloud Tiering Policies
-1. **Volume Free Space Policy**: Sets the minimum percentage of free space to keep on the local disk volume (e.g., *Always keep 20% free space*).
-2. **Date Policy**: Caches files accessed within a specific number of days (e.g., *Cache files accessed within the last 14 days*).
+| Step | Action | Location |
+|------|--------|----------|
+| 1 | Create a **Storage Sync Service** resource | Azure Portal |
+| 2 | Install the **Azure File Sync agent** on Windows Server | On-premises Server |
+| 3 | **Register** the Windows Server with the Storage Sync Service | On-premises Server / Portal |
+| 4 | Create a **Sync Group** | Azure Portal |
+| 5 | Add the Azure file share as the **Cloud Endpoint** | Azure Portal |
+| 6 | Add the server folder path as a **Server Endpoint** | Azure Portal |
+| 7 | Wait for initial sync | Automatic |
 
-> ⚠️ **Cloud Change Detection Gotcha**: If files are added or modified directly in the Azure File Share (via Portal or AzCopy), Azure File Sync does not detect them immediately. The cloud change detection job runs only **once every 24 hours**.
->
-> 💡 **Immediate Sync Fix**: To force immediate detection of changes in the cloud share, run:
-> ```powershell
-> Invoke-AzStorageSyncChangeDetection -ResourceGroupName "RG1" `
->   -StorageSyncServiceName "SyncService1" `
->   -SyncGroupName "SyncGroup1" `
->   -Path "subfolder/path"
-> ```
+### Common 3-Step Exam Sequences
+
+**Q: You have a Storage Sync Service and sync group already created. What 3 steps do you perform to sync Server1?**
+→ (C) **Install Azure File Sync agent** on Server1 → (B) **Register Server1** → (E) **Create a server endpoint** (add server folder to sync group)
+
+**Q: You have an Azure file share and on-premises Server1. What 2 Azure subscription actions do you perform first?**
+→ (1) **Create a Storage Sync Service** → (2) **Install the Azure File Sync agent** on Server1
+
+---
+
+## ☁️ Cloud Tiering
+
+Cloud tiering allows infrequently accessed files to be **tiered to Azure** while maintaining a stub (placeholder) file on-premises.
+
+| Concept | Detail |
+|---------|--------|
+| **Purpose** | Frees up local disk space by moving cold files to the cloud |
+| **Stub file** | A placeholder file with `FILE_ATTRIBUTE_OFFLINE` attribute (`O`) — looks like a normal file |
+| **Volume Free Space policy** | Keeps a specified % of local volume free (e.g., 20%) |
+| **Date policy** | Tiers files not accessed in N days (e.g., last 30 days) |
+| **Cloud tiering scope** | Per **server endpoint** (not per sync group) |
+
+> 💡 **How it works**: When a tiered file is accessed, File Sync automatically recalls the full file from Azure. Users see no difference in behavior.
+
+### Cloud Tiering Exam Scenario
+
+**Q: A sync group has Endpoint1 (tiering OFF), Endpoint2 (tiering OFF), Endpoint3 (tiering ON). A file is added to Endpoint1. Where will it appear within 24 hours?**
+
+| Situation | Result |
+|-----------|--------|
+| File added to **Endpoint1** (cloud tiering OFF) | File syncs to cloud → **Endpoint3 only** receives the file as a tiered stub |
+| File added to **Endpoint2** (cloud tiering OFF) | File syncs to cloud → **Endpoint1, Endpoint2, and Endpoint3** all have the file |
+
+> Explanation: When a file is at a server endpoint with tiering OFF, it goes to the cloud endpoint. Other server endpoints with tiering OFF get the full file; endpoints with tiering ON may receive a stub.
+
+---
+
+## 🔄 File Sync Behavior Rules
+
+| Rule | Explanation |
+|------|-------------|
+| **One cloud endpoint per sync group** | Cannot add a second Azure file share to the same sync group |
+| **Files merge on endpoint add** | Adding a file share with existing files → files **merge** with existing sync group files |
+| **Server must be registered first** | Only registered servers can have server endpoints added |
+| **Unregistered server = no endpoint** | Files on a server not registered to the sync service will NOT sync |
+| **Immediate cloud change detection** | Run `Invoke-AzStorageSyncChangeDetection` PowerShell cmdlet to force immediate detection of changes in the cloud endpoint |
 
 ---
 
 ## 📋 Exam-Ready Facts
 
 | Fact | Value / Rule |
-|------|--------------|
-| Azure Files SMB outbound port | **Port 445** (TCP) |
-| Azure File Sync communication port | **Port 443** (HTTPS) |
-| Cloud endpoints per Sync Group | Exactly **1** Cloud Endpoint |
-| Supported local filesystem for Server Endpoint | **NTFS only** (FAT, FAT32, ReFS are NOT supported) |
-| Tiered file attribute | Offline attribute (`O` / `FILE_ATTRIBUTE_OFFLINE`) |
-| Cloud change detection interval | Automatically runs every 24 hours |
-| Manual cloud change scan command | `Invoke-AzStorageSyncChangeDetection` |
-| Maximum snapshots per file share | **200 snapshots** |
-| Max standard file share capacity | Up to **100 TiB** (with large file shares enabled) |
+|------|--------------| 
+| Port for Azure Files (SMB) | **TCP 445** |
+| UNC path format | `\\<account>.file.core.windows.net\<share>` |
+| Premium file share account type | **FileStorage** account |
+| Cloud endpoints per sync group | **Exactly 1** |
+| Server endpoints per sync group | **Multiple allowed** |
+| Cloud tiering stub attribute | `FILE_ATTRIBUTE_OFFLINE` (`O`) |
+| Immediate cloud change detection | `Invoke-AzStorageSyncChangeDetection` |
+| ISP blocks port 445 workaround | Use **Azure File Sync** or **VPN** |
+| Lifecycle management rules apply to | **GPv2, BlobStorage, BlockBlobStorage** — NOT GPv1 |
+| Premium file share hosting | **FileStorage** account (not GPv2) |
+| Azure Backup for file shares | Recovery vault must be in the **same region** as the storage account |
 
 ---
 
 ## 🚨 Common Exam Scenarios (Real Exam MCQs)
 
-**Q: Users on an on-premises network cannot map an Azure file share directly using `net use`. Network diagnostics show outbound port 445 is blocked by their Internet Service Provider (ISP). How can users access the files?**
-→ Either establish a **Point-to-Site (P2S) VPN** to Azure to bypass ISP port 445 blocking, OR deploy **Azure File Sync** on a local Windows Server so clients connect over LAN SMB.
+**Q: Users at home need to map a drive to an Azure file share, but TCP port 445 is blocked by their ISP. What is the best solution?**
+→ Deploy **Azure File Sync** and add the servers as server endpoints. Users access files from a local server endpoint — no port 445 required from home PCs.
 
-**Q: You need to deploy Azure File Sync. In which sequence should you perform the administrative tasks?**
-→ 
-1. Create a Storage Sync Service.
-2. Install the Azure File Sync agent on the Windows Server.
-3. Register the server with the Storage Sync Service.
-4. Create a Sync Group and add a Cloud Endpoint.
-5. Add a Server Endpoint with Cloud Tiering enabled.
+**Q: You have a Storage Sync Service named Sync1 and sync group Group1 with share1 as the cloud endpoint. You register Server1 and Server2. Can you add share2 as another cloud endpoint to Group1?**
+→ **No.** A sync group can have only **one cloud endpoint**.
 
-**Q: An administrator uploads 500 files directly to an Azure File share using Azure Storage Explorer. Two hours later, users accessing the synced on-premises file server cannot see the new files. What should you do?**
-→ Azure File Sync detects cloud changes only once every 24 hours. To make the files available immediately on-premises, run the `Invoke-AzStorageSyncChangeDetection` PowerShell cmdlet.
+**Q: You add share1 as the cloud endpoint and D:\\Folder1 on Server1 as a server endpoint to Group1. Can you add D:\\Folder1 on Server2 as another server endpoint to Group1?**
+→ **Yes.** Multiple server endpoints are allowed per sync group, even on different registered servers.
 
-**Q: Server1 has a 1 TB volume hosting a synced file share with Cloud Tiering enabled. The volume free space policy is set to 25%. What happens when disk usage reaches 80% (only 20% free space left)?**
-→ Azure File Sync automatically tiers the least recently accessed files to Azure Files until free space on the volume reaches 25%.
+**Q: Files exist in an Azure file share added as a cloud endpoint to a sync group that already has files on server endpoints. What happens?**
+→ The existing cloud files **merge** with the files already present on the server endpoints. No files are deleted.
+
+**Q: Data3 is on Server3 which is NOT registered to Sync1. Will data3 sync to Group1?**
+→ **No.** Only servers registered to the Storage Sync Service can have server endpoints added to sync groups.
+
+**Q: You create a storage account named contosostorage and a file share named data. What UNC path do you use in a script to reference files from data?**
+→ `\\contosostorage.file.core.windows.net\data`
+
+**Q: Which storage accounts support lifecycle management rules for hot/cool/archive tiering?**
+→ **GPv2, BlobStorage, and BlockBlobStorage** accounts. GPv1 does NOT support lifecycle management.
+
+**Q: Premium Azure file shares are hosted in which account type?**
+→ **FileStorage** account (a special-purpose account kind).
+
+---
+
+## 📁 Azure File Share Backup
+
+Azure Backup supports backing up **Azure file shares** directly through Recovery Services vaults.
+
+| Rule | Detail |
+|------|--------|
+| Vault region | Must be in the **same region** as the storage account |
+| Storage account scope | Only storage accounts in the **same region** as the vault are discovered |
+| Supported | Azure file shares (share1 in a storage account in West US → Vault in West US) |
+| NOT supported | Blob containers cannot be backed up to Recovery Services vaults |
+
+> 💡 **Example**: Vault1 is in East US, Vault2 is in West US. Storage1 (West US) contains share1 and blob1.
+> - Vault1 can back up: Nothing from storage1 (different region)
+> - Vault2 can back up: **share1 only** (blob containers not supported by vault backup)
